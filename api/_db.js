@@ -1,4 +1,4 @@
-import fs from 'fs';
+﻿import fs from 'fs';
 import path from 'path';
 
 const TMP_CLIENTS_FILE = path.join('/tmp', 'clients-db.json');
@@ -11,7 +11,7 @@ export function getClientsDb() {
   try {
     if (fs.existsSync(TMP_CLIENTS_FILE)) {
       const data = JSON.parse(fs.readFileSync(TMP_CLIENTS_FILE, 'utf-8'));
-      if (Array.isArray(data) && data.length > 0) return data;
+      if (Array.isArray(data)) return data;
     }
   } catch (e) {
     // ignore
@@ -78,3 +78,4 @@ export function saveOrdersDb(orders) {
     // ignore
   }
 }
+

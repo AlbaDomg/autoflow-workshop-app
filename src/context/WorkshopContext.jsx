@@ -68,34 +68,38 @@ const buildPortalToken = (orderId, licensePlate = '') => {
   return `tok-${cleanId}-${cleanPlate}`;
 };
 
-// Validador estricto para comprobar si un texto describe realmente una avería mecánica o diagnóstico
-// (y descartar radicalmente cortesías, citas, confirmaciones o saludos como "genial gracias")
+// Detecta textos que NO son un motivo de avería: cortesías, confirmaciones y fechas/horas de cita
+export const isCourtesyText = (t) => {
+  const clean = String(t || '').trim().toLowerCase().replace(/^[¡!¿?.,\s]+/, '');
+  if (!clean) return true;
+  // Respuestas cortas de palabra COMPLETA ("no arranca" NO es cortesía)
+  if (/^(si|sí|no|bien|vale|ok|okey|okay|porfa|por favor|gracias|genial|perfecto|listo)[\s.,!¡?]*$/i.test(clean)) return true;
+  // Cortesías y despedidas en mensajes cortos (palabra completa)
+  if (clean.length < 45 && /^(genial|gracias|muchas gracias|muchísimas gracias|perfecto|vale|ok|okey|okay|de nada|adios|adiós|hasta luego|hasta pronto|entendido|listo|de acuerdo|nos vemos|fenomenal|estupendo|estupenda|guay)(?![a-záéíóúñ])/i.test(clean)) return true;
+  // Fechas y horarios de cita
+  if (/^(pasado mañana|mañana|hoy|el (lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)|a las \d+|el \d{1,2}\b|\d{1,2}[/:]\d{1,2})/i.test(clean)) return true;
+  return false;
+};
+
+// Validador estricto: ¿el texto describe realmente una avería / servicio de taller?
 export const isAutomotiveIssue = (t) => {
   if (!t) return false;
   const clean = String(t).trim().toLowerCase();
-  if (clean.length < 3) return false;
+  if (clean.length < 3 || isCourtesyText(clean)) return false;
 
-  // Frases de cortesía, despedidas o confirmaciones que NUNCA son motivo de avería
-  if (/^(genial|gracias|muchas gracias|genial gracias|ok|okay|vale|perfecto|de nada|adios|adiós|hasta|buenas|hola|si|no|por favor|porfa|listo|entendido|de acuerdo|nos vemos|bien|fenomenal|estupendo)/i.test(clean)) {
-    return false;
-  }
-  // Frases de fechas y horarios que son citas, no averías
-  if (/^(pasado mañana|mañana|hoy|el lunes|el martes|el miercoles|el miércoles|el jueves|el viernes|el sabado|el sábado|el domingo|a las \d+)/i.test(clean)) {
-    return false;
-  }
-
-  // Comprobación de palabras clave automotrices y diagnósticos mecánicos
   const automotiveKeywords = [
-    'freno', 'pastilla', 'disco', 'ruido', 'chirr', 'chasquido',
+    'freno', 'pastilla', 'disco', 'ruido', 'chirr', 'chasquido', 'golpeteo',
     'aceite', 'motor', 'itv', 'revis', 'aver', 'arranc', 'bater',
     'embrague', 'neumat', 'rueda', 'pinch', 'luz', 'luces', 'faro',
     'testigo', 'fallo', 'humo', 'temperatura', 'calienta', 'chapa',
     'pintura', 'golpe', 'abollad', 'mantenimiento', 'diagn', 'filtro',
     'correa', 'distribuc', 'suspens', 'amortigua', 'direcci', 'escape',
     'cataliz', 'clima', 'aire', 'fuga', 'líquid', 'liquid', 'anticongel',
-    'vibr', 'potencia', 'aceler', 'cambio', 'marcha'
+    'vibr', 'potencia', 'aceler', 'cambio', 'marcha', 'problema', 'coche',
+    'cristal', 'luna', 'parabrisas', 'espejo', 'puerta',
+    'alternador', 'turbo', 'inyect', 'bujía', 'bujia', 'radiador', 'frena', 'falla',
+    'funciona', 'funcionando', 'pierde', 'gotea', 'huele', 'tiembla', 'suena'
   ];
-
   return automotiveKeywords.some(keyword => clean.includes(keyword));
 };
 
@@ -179,13 +183,9 @@ const ensureOrdersHaveTokens = (ordersList) => {
     .filter(o => o && o?.client?.dniNif !== '48392019Z')
     .map(o => {
       let cleanProblem = o.problemDescription;
-      // Sanear de inmediato cualquier tarjeta que tuviese guardada una cortesía o cita en lugar de avería
-      if (!cleanProblem || !isAutomotiveIssue(cleanProblem)) {
-        if (/freno/i.test(o.problemDescription || '') || /1234kgb/i.test(o.vehicle?.licensePlate || '')) {
-          cleanProblem = 'Diagnóstico del sistema de frenos';
-        } else {
-          cleanProblem = 'Diagnóstico y revisión en taller';
-        }
+      // Sanear SOLO tarjetas que guardaron una cortesía/cita en lugar de avería (nunca tocar descripciones reales)
+      if (!cleanProblem || isCourtesyText(cleanProblem)) {
+        cleanProblem = 'Diagnóstico y revisión en taller';
       }
 
       return {
@@ -394,6 +394,8 @@ export const WorkshopProvider = ({ children }) => {
   }, [sessionPendingDni]);
 
   const [isWaAiTyping, setIsWaAiTyping] = useState(false);
+  const ordersHydratedRef = useRef(false);
+  const clientsHydratedRef = useRef(false);
 
   useEffect(() => {
     // Sincronizar clientes con la base de datos backend (clients-db.json)
@@ -503,8 +505,11 @@ export const WorkshopProvider = ({ children }) => {
 
   useEffect(() => {
     localStorage.setItem('autoflow_orders', JSON.stringify(orders));
-    // Sincronizar en tiempo real con orders-db.json en disco
-    if (orders.length > 0) {
+    // Sincronizar con el backend. La primera ejecución (montaje) NO envía nada para no pisar datos del servidor;
+    // a partir de ahí se envía siempre, INCLUSO la lista vacía (así borrar la última tarjeta también se mantiene).
+    if (!ordersHydratedRef.current) {
+      ordersHydratedRef.current = true;
+    } else {
       fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -515,8 +520,9 @@ export const WorkshopProvider = ({ children }) => {
 
   useEffect(() => {
     localStorage.setItem('autoflow_clients', JSON.stringify(clients));
-    // Sincronizar en tiempo real con clients-db.json en disco
-    if (clients.length > 0) {
+    if (!clientsHydratedRef.current) {
+      clientsHydratedRef.current = true;
+    } else {
       fetch('/api/clients', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1135,6 +1141,13 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
               }
             }
 
+            if (!detectedProblem) {
+              const probAiMatch = aiReply.match(/(?:debido\s+al\s+|debido\s+a\s+|por\s+el\s+|por\s+la\s+)(problema\s+(?:con|de|en)\s+[^*.\n,!]+)/i);
+              if (probAiMatch && probAiMatch[1] && isAutomotiveIssue(probAiMatch[1])) {
+                detectedProblem = probAiMatch[1].trim();
+              }
+            }
+
             // B) Si la IA no cita la avería en este mensaje (ej: cuando responde a "genial gracias"), buscar en mensajes anteriores de la IA diagnósticos formulados
             if (!detectedProblem || !isAutomotiveIssue(detectedProblem)) {
               for (const m of chatHistory.slice().reverse()) {
@@ -1163,7 +1176,7 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
 
             // D) Buscar si en orders ya existe una orden activa en recepción para este vehículo o cliente con avería real
             if (!detectedProblem || !isAutomotiveIssue(detectedProblem)) {
-              const plateToMatch = candidateVehicle?.licensePlate || activeVehicle?.licensePlate;
+              const plateToMatch = activeVehicle?.licensePlate || selectedVehicle?.licensePlate;
               const dniToMatch = matchedClient?.dniNif || activeDni;
               const existingCard = orders.find(o =>
                 o.status === 'recepcion' && (
@@ -1445,7 +1458,7 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
     const token = data.portalToken || buildPortalToken(orderId, vehicleData.licensePlate);
 
     const rawNewProblem = problemDesc || data.problemDescription;
-    const finalNewProblem = isAutomotiveIssue(rawNewProblem)
+    const finalNewProblem = (rawNewProblem && !isCourtesyText(rawNewProblem))
       ? rawNewProblem
       : 'Diagnóstico y revisión en taller';
 
@@ -1510,11 +1523,13 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
         // REGLA DE ORO DE PRESERVACIÓN:
         // Si la tarjeta existente ya tiene una avería o diagnóstico automotriz real registrado,
         // NUNCA permitir que sea sobreescrito por un mensaje de cortesía, confirmación o texto genérico.
-        const existingHasReal = isAutomotiveIssue(existingOrder.problemDescription) &&
+        const existingHasReal = !isCourtesyText(existingOrder.problemDescription) &&
+          existingOrder.problemDescription !== 'Diagnóstico y revisión en taller' &&
           existingOrder.problemDescription !== 'Revisión y diagnóstico en taller' &&
           existingOrder.problemDescription !== 'Avería comunicada por el cliente por WhatsApp';
 
-        const incomingHasReal = isAutomotiveIssue(problemDesc) &&
+        const incomingHasReal = !isCourtesyText(problemDesc) &&
+          problemDesc !== 'Diagnóstico y revisión en taller' &&
           problemDesc !== 'Revisión y diagnóstico en taller' &&
           problemDesc !== 'Avería comunicada por el cliente por WhatsApp';
 
