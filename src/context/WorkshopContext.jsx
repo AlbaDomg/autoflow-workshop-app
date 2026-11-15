@@ -844,22 +844,11 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
               portalUrl: aiReply.includes('/portal/') ? portalUrl : null
             });
 
-            // Si la IA confirma la cita o recepción, crear/actualizar automáticamente la tarjeta en Recepción
-            const lowerReply = aiReply.toLowerCase();
-            const isConfirmed = 
-              lowerReply.includes('cita') || 
-              lowerReply.includes('agendad') || 
-              lowerReply.includes('recepci') || 
-              lowerReply.includes('registrad') || 
-              lowerReply.includes('te esperamos') ||
-              lowerReply.includes('quedamos') ||
-              lowerReply.includes('reservad');
-
-            if (isConfirmed) {
-              const activeVeh = selectedVehicle || targetOrder.vehicle;
-              const activeCli = matchedClient || targetOrder.client;
+            // Crear o actualizar automáticamente la tarjeta en Recepción
+            const activeVeh = selectedVehicle || targetOrder.vehicle;
+            const activeCli = matchedClient || targetOrder.client;
+            if (activeVeh?.licensePlate || activeCli?.fullName || activeCli?.dniNif) {
               createOrUpdateOrderInRecepcion({
-                ...targetOrder,
                 client: activeCli,
                 vehicle: activeVeh,
                 problemDescription: targetOrder.problemDescription || text.trim() || 'Cita concertada con Asistente Virtual IA'
@@ -1004,8 +993,11 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
       'Avería comunicada por el cliente por WhatsApp'
     ).trim();
     const targetStatus = data.status || 'recepcion'; // ¡Ubicado por defecto en Recepción!
-    const nextNum = orders.length + 1;
-    const orderId = data.orderId || data.id || `ORD-2026-${String(nextNum).padStart(3, '0')}`;
+    const rawId = data.orderId || data.id;
+    const isTempId = !rawId || rawId === 'ORD-NUEVA-RECEPCION' || String(rawId).startsWith('guest-') || String(rawId).startsWith('cli-');
+    const orderId = isTempId
+      ? `ORD-2026-${String(Math.floor(Math.random() * 800) + 100)}`
+      : rawId;
     const token = data.portalToken || buildPortalToken(orderId, vehicleData.licensePlate);
 
     const newOrder = {
