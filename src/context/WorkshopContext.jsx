@@ -174,7 +174,7 @@ const ensureOrdersHaveTokens = (ordersList) => {
 const migrateClientsList = (clientsList) => {
   if (!Array.isArray(clientsList)) return [];
   // Purgar de forma permanente fichas residuales de prueba antiguas con DNI 48392019Z
-  // y purgar vehículos fantasma de prueba (1234AGB, 4865MGZ / Ibiza)
+  // y purgar vehículos fantasma de prueba (1234AGB, 4865MGZ)
   return clientsList
     .filter(c => c && c.dniNif !== '48392019Z')
     .map(c => {
@@ -185,8 +185,7 @@ const migrateClientsList = (clientsList) => {
             .filter(v => 
               v &&
               v.licensePlate !== '4865MGZ' && 
-              v.licensePlate !== '1234AGB' && 
-              String(v.model || '').toLowerCase() !== 'ibiza'
+              v.licensePlate !== '1234AGB'
             )
             .map(v => {
               if (v.licensePlate === '8465MGZ') {
@@ -303,7 +302,7 @@ export const WorkshopProvider = ({ children }) => {
   }, [activeWaOrderId]);
   const [waWebhookUrl, setWaWebhookUrl] = useState(() => {
     const saved = localStorage.getItem('autoflow_wa_webhook_url');
-    if (!saved || saved.includes('.loca.lt') || saved.includes('localhost:5678')) {
+    if (!saved || !saved.includes('atmansys.app.n8n.cloud')) {
       return DEFAULT_WA_WEBHOOK_URL;
     }
     return saved;
@@ -1773,7 +1772,6 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
   const deleteClient = async (dniNif) => {
     if (!dniNif) return;
     const cleanDni = dniNif.trim().toUpperCase();
-    setClients(prev => prev.filter(c => c.dniNif?.toUpperCase() !== cleanDni));
     try {
       const saved = JSON.parse(localStorage.getItem('autoflow_deleted_client_dnis') || '[]');
       if (!saved.includes(cleanDni)) {
@@ -1781,6 +1779,15 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
         localStorage.setItem('autoflow_deleted_client_dnis', JSON.stringify(saved));
       }
     } catch {}
+
+    setClients(prev => {
+      const nextClients = prev.filter(c => c.dniNif?.toUpperCase() !== cleanDni);
+      try {
+        localStorage.setItem('autoflow_clients', JSON.stringify(nextClients));
+      } catch {}
+      return nextClients;
+    });
+
     try {
       await fetch('/api/clients/delete', {
         method: 'POST',
@@ -1814,6 +1821,10 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
         return { ...c, vehicles: newVehicles };
       });
 
+      try {
+        localStorage.setItem('autoflow_clients', JSON.stringify(nextClients));
+      } catch {}
+
       // Sincronizar inmediatamente con clients-db.json en disco
       fetch('/api/clients', {
         method: 'POST',
@@ -1839,6 +1850,18 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
       }
     } catch {}
 
+    setClients(prev => {
+      const nextClients = prev.map(c => {
+        if (c.dniNif.toLowerCase() !== dniNif.toLowerCase()) return c;
+        const filtered = (c.vehicles || []).filter(v => v.licensePlate.toUpperCase() !== cleanPlate);
+        return { ...c, vehicles: filtered };
+      });
+      try {
+        localStorage.setItem('autoflow_clients', JSON.stringify(nextClients));
+      } catch {}
+      return nextClients;
+    });
+
     // Sincronizar inmediatamente con clients-db.json en disco
     fetch('/api/clients/unlink-vehicle', {
       method: 'POST',
@@ -1846,25 +1869,10 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
       body: JSON.stringify({ dniNif, licensePlate: cleanPlate })
     }).catch(() => {});
 
-    setClients(prev => {
-      const nextClients = prev.map(c => {
-        if (c.dniNif.toLowerCase() !== dniNif.toLowerCase()) return c;
-        const newVehicles = (c.vehicles || []).filter(v => v.licensePlate.toUpperCase() !== cleanPlate);
-        return { ...c, vehicles: newVehicles };
-      });
-
-      // Sincronizar también estado global completo
-      fetch('/api/clients', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ syncAll: true, clients: nextClients })
-      }).catch(() => {});
-
-      return nextClients;
-    });
-
-    addToast(`Vehículo ${licensePlate} desvinculado`, 'info');
+    addToast(`🗑️ Vehículo ${cleanPlate} desvinculado`, 'info');
   };
+
+
 
   // Vaciar todos los coches entregados del historial
   const clearDeliveredOrders = () => {
