@@ -20,14 +20,14 @@ export default async function handler(req, res) {
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
     
-    const tunnelUrl = process.env.VITE_N8N_CHAT_WEBHOOK_URL || 'https://whole-cycles-turn.loca.lt/webhook/d6f83c61-7d73-455b-80bb-22ae34725228/chat';
+    const tunnelBase = process.env.VITE_TUNNEL_URL || 'https://thirty-feet-play.loca.lt';
+    const defaultChatWebhook = `${tunnelBase}/webhook/d6f83c61-7d73-455b-80bb-22ae34725228/chat`;
 
-    // URL destino de n8n (puede venir en el propio payload o en variable de entorno)
-    let targetUrl = body.targetWebhookUrl || tunnelUrl;
+    // URL destino de n8n
+    let targetUrl = body.targetWebhookUrl || defaultChatWebhook;
 
-    // Si viene localhost:5678 (porque viene de localStorage viejo), reemplazar por el túnel
+    // Si viene localhost:5678, reemplazar por la URL base del túnel
     if (targetUrl.includes('localhost:5678')) {
-      const tunnelBase = tunnelUrl.replace(/\/webhook.*$/, '');
       targetUrl = targetUrl.replace(/http:\/\/localhost:5678/, tunnelBase);
     }
 
