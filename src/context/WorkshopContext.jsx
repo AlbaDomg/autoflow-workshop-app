@@ -759,7 +759,7 @@ export const WorkshopProvider = ({ children }) => {
         aiSystemInstruction = `CLIENTE YA IDENTIFICADO: ${matchedClient.fullName} (DNI/NIF: ${matchedClient.dniNif}, Teléfono: ${matchedClient.phone}, Email: ${matchedClient.email}, Dirección: ${matchedClient.address}). VEHÍCULO SELECCIONADO PARA LA CITA: ${activeVehicle.brand} ${activeVehicle.model} (Matrícula: ${activeVehicle.licensePlate}, VIN: ${activeVehicle.vin}, Km: ${activeVehicle.mileage}).
 REGLAS ESTRICTAS DE INTERACCIÓN:
 1. Este cliente YA ESTÁ IDENTIFICADO y su DNI (${matchedClient.dniNif}) y teléfono (${matchedClient.phone}) ya constan en su ficha técnica y en este mensaje. TIENES TERMINANTEMENTE PROHIBIDO VOLVER A PEDIR SU DNI, NIF, TELÉFONO O CONFIRMAR DATOS PERSONALES.
-2. Si el cliente indica el motivo de la avería, genera la tarjeta de recepción usando su teléfono registrado (${matchedClient.phone}).
+2. Si el cliente indica el motivo de la avería o revisión, genera INMEDIATAMENTE la tarjeta de recepción usando su teléfono registrado (${matchedClient.phone}). Sus kilómetros ya están registrados (${activeVehicle.mileage || 55000} km), así que NO le vuelvas a pedir el kilometraje ni datos que ya constan en su ficha.
 3. Si el cliente indica una fecha y hora (ej: "27 de noviembre a las 2 de la tarde"), NO preguntes nada más ni pidas el DNI: LLAMA INMEDIATAMENTE a la herramienta de Google Calendar para agendar la cita usando el título "Cita Diagnóstico ${matchedClient.fullName} ${activeVehicle.brand} ${activeVehicle.model} (${activeVehicle.licensePlate})".`;
       } else if (hasMultipleVehicles) {
         const vehiclesList = clientVehicles.map((v, i) => `${i + 1}) ${v.brand} ${v.model} (matrícula: ${v.licensePlate})`).join(', ');
