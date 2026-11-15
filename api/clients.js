@@ -1,5 +1,4 @@
-import fs from 'fs';
-import path from 'path';
+import { getClientsDb, saveClientsDb } from './_db.js';
 
 export default function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -10,18 +9,22 @@ export default function handler(req, res) {
     return res.status(200).end();
   }
 
-  const filePath = path.join(process.cwd(), 'clients-db.json');
-  let clients = [];
-  try {
-    if (fs.existsSync(filePath)) {
-      clients = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    }
-  } catch (e) {
-    console.error('Error leyendo clients-db.json en Vercel:', e);
-  }
+  let clients = getClientsDb();
 
   if (req.method === 'POST') {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+
+    // Sincronización masiva de clientes desde la aplicación React
+    if (body.syncAll && Array.isArray(body.clients)) {
+      saveClientsDb(body.clients);
+      return res.status(200).json({
+        success: true,
+        message: 'Base de datos de clientes sincronizada correctamente',
+        count: body.clients.length,
+        clients: body.clients
+      });
+    }
+
     const fullName = (body.fullName || body.nombre || body.nombreCompleto || 'Cliente').trim();
     const dniNif = (body.dniNif || body.dni || body.nif || '').trim().toUpperCase();
     const phone = (body.phone || body.telefono || '').trim();
@@ -46,10 +49,44 @@ export default function handler(req, res) {
       vehicles: vehicle.licensePlate ? [vehicle] : []
     };
 
+    // Actualizar o insertar en la lista de clientes
+    const existingIndex = clients.findIndex(c =>
+      (dniNif && c.dniNif && c.dniNif.toUpperCase() === dniNif) ||
+      (phone && c.phone && c.phone.replace(/\s+/g, '') === phone.replace(/\s+/g, ''))
+    );
+
+    if (existingIndex >= 0) {
+      const existing = clients[existingIndex];
+      const existingVehicles = Array.isArray(existing.vehicles) ? existing.vehicles : [];
+      let updatedVehicles = [...existingVehicles];
+      if (vehicle.licensePlate) {
+        const vIdx = updatedVehicles.findIndex(v => v.licensePlate?.toUpperCase() === vehicle.licensePlate);
+        if (vIdx >= 0) {
+          updatedVehicles[vIdx] = { ...updatedVehicles[vIdx], ...vehicle };
+        } else {
+          updatedVehicles.push(vehicle);
+        }
+      }
+      clients[existingIndex] = {
+        ...existing,
+        fullName: fullName !== 'Cliente' ? fullName : existing.fullName,
+        dniNif: dniNif || existing.dniNif,
+        phone: phone || existing.phone,
+        email: email || existing.email,
+        address: address || existing.address,
+        vehicles: updatedVehicles
+      };
+    } else {
+      clients.push(newClient);
+    }
+
+    saveClientsDb(clients);
+
     return res.status(200).json({
       success: true,
       message: `Cliente ${fullName} registrado correctamente`,
-      client: newClient
+      client: newClient,
+      clients
     });
   }
 

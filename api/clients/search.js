@@ -1,5 +1,4 @@
-import fs from 'fs';
-import path from 'path';
+import { getClientsDb } from '../_db.js';
 
 export default function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -18,15 +17,7 @@ export default function handler(req, res) {
   const plateQuery = (query.plate || query.matricula || query.licensePlate || body.plate || body.matricula || body.licensePlate || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
   const genericQuery = (query.q || body.q || '').trim();
 
-  let clients = [];
-  try {
-    const filePath = path.join(process.cwd(), 'clients-db.json');
-    if (fs.existsSync(filePath)) {
-      clients = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    }
-  } catch (e) {
-    console.error('Error leyendo clients-db.json:', e);
-  }
+  const clients = getClientsDb();
 
   let matched = null;
 
@@ -74,6 +65,7 @@ export default function handler(req, res) {
     success: true,
     found: false,
     message: 'Cliente no encontrado en la base de datos de Talleres Naranjo',
-    client: null
+    client: null,
+    vehicles: []
   });
 }

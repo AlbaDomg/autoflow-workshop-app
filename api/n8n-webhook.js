@@ -1,3 +1,5 @@
+import { getClientsDb, saveClientsDb } from './_db.js';
+
 export default async function handler(req, res) {
   // Configuración de cabeceras CORS para permitir llamadas desde cualquier dispositivo/móvil
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -19,6 +21,42 @@ export default async function handler(req, res) {
 
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
+
+    // Sincronizar dinámicamente el perfil del cliente y sus vehículos en la base de datos backend
+    if (body.existingClientProfile && body.existingClientProfile.dniNif) {
+      try {
+        const clients = getClientsDb();
+        const profDni = String(body.existingClientProfile.dniNif).trim().toUpperCase();
+        const cIdx = clients.findIndex(c => c.dniNif?.toUpperCase() === profDni);
+        const incomingVehicles = Array.isArray(body.vehicles) && body.vehicles.length > 0
+          ? body.vehicles
+          : (body.existingClientProfile.vehicles || []);
+
+        if (cIdx >= 0) {
+          const currentVehicles = Array.isArray(clients[cIdx].vehicles) ? clients[cIdx].vehicles : [];
+          const mergedVehicles = [...currentVehicles];
+          incomingVehicles.forEach(iv => {
+            if (iv && iv.licensePlate && !mergedVehicles.some(mv => mv.licensePlate?.toUpperCase() === iv.licensePlate.toUpperCase())) {
+              mergedVehicles.push(iv);
+            }
+          });
+          clients[cIdx] = {
+            ...clients[cIdx],
+            ...body.existingClientProfile,
+            vehicles: mergedVehicles
+          };
+          saveClientsDb(clients);
+        } else if (profDni) {
+          clients.push({
+            ...body.existingClientProfile,
+            vehicles: incomingVehicles
+          });
+          saveClientsDb(clients);
+        }
+      } catch (errDb) {
+        console.warn('Error sincronizando perfil en db backend:', errDb);
+      }
+    }
     
     const n8nCloudBase = process.env.VITE_N8N_CLOUD_URL || 'https://atmansys.app.n8n.cloud';
     const defaultChatWebhook = `${n8nCloudBase}/webhook/d6f83c61-7d73-455b-80bb-22ae34725228/chat`;

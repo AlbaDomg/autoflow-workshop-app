@@ -220,7 +220,8 @@ const INITIAL_CLIENTS = [
     address: 'Calle Estepona,1',
     vehicles: [
       { brand: 'Audi', model: 'Q5', licensePlate: '8465MGZ', vin: 'VSSZZZ1K2V1234567', mileage: 55000 },
-      { brand: 'Seat', model: 'Panda', licensePlate: '2534GHK', vin: 'VSSZZZ1K2V123456', mileage: 79000 }
+      { brand: 'Seat', model: 'Panda', licensePlate: '2534GHK', vin: 'VSSZZZ1K2V123456', mileage: 79000 },
+      { brand: 'Seat', model: 'Ibiza', licensePlate: '1234KGB', vin: 'VSSZZZ6JZDR123456', mileage: 68500 }
     ]
   },
   {
@@ -682,6 +683,144 @@ export const WorkshopProvider = ({ children }) => {
     return null;
   };
 
+  // Extraer con alta precisión los datos del cliente y vehículo a partir de la conversación del chat
+  const parseClientAndVehicleFromConversation = (aiReply = '', chatHistory = [], text = '', activeDni = '') => {
+    const result = {
+      fullName: '',
+      dniNif: activeDni || '',
+      phone: '',
+      email: '',
+      address: '',
+      brand: '',
+      model: '',
+      licensePlate: '',
+      vin: '',
+      mileage: 0,
+      problemDescription: ''
+    };
+
+    const allMessages = [
+      ...(Array.isArray(chatHistory) ? chatHistory : []),
+      { sender: 'client', text: text || '' },
+      { sender: 'ai', text: aiReply || '' }
+    ];
+
+    const fullText = allMessages.map(m => m.text || '').join('\n');
+    const userMessages = allMessages.filter(m => m.sender === 'client');
+    const userText = userMessages.map(m => m.text || '').join('\n');
+    const aiText = allMessages.filter(m => m.sender === 'ai').map(m => m.text || '').join('\n');
+
+    // 1. DNI / NIF / NIE
+    const dniRegex = /\b([0-9XYZxyz][0-9]{7}[A-Za-z]|[0-9]{8}[A-Za-z])\b/;
+    const dniMatch = fullText.match(dniRegex);
+    if (dniMatch) {
+      result.dniNif = dniMatch[1].toUpperCase();
+    }
+
+    // 2. Teléfono (móvil español o con prefijo internacional)
+    const phoneRegex = /(?:(?:\+|00)34[\s.-]*)?([6789]\d{2}[\s.-]?\d{3}[\s.-]?\d{3})\b/;
+    const phoneMatch = fullText.match(phoneRegex);
+    if (phoneMatch) {
+      const raw = phoneMatch[0].replace(/[\s.-]/g, '');
+      result.phone = raw.startsWith('+34') ? raw : (raw.startsWith('0034') ? `+${raw.slice(2)}` : `+34${raw}`);
+    }
+
+    // 3. Email
+    const emailRegex = /\b([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/;
+    const emailMatch = fullText.match(emailRegex);
+    if (emailMatch) {
+      result.email = emailMatch[1].toLowerCase();
+    }
+
+    // 4. Matrícula (española moderna 1234ABC o clásica M1234AB)
+    const plateRegex = /\b([0-9]{4}\s*[- ]?[A-Z]{3})\b/i;
+    const oldPlateRegex = /\b([A-Z]{1,2}\s*[- ]?[0-9]{4}\s*[- ]?[A-Z]{1,2})\b/i;
+    const plateMatch = fullText.match(plateRegex) || fullText.match(oldPlateRegex);
+    if (plateMatch) {
+      result.licensePlate = plateMatch[1].replace(/[\s-]/g, '').toUpperCase();
+    }
+
+    // 5. Marca y Modelo de vehículo
+    const KNOWN_BRANDS = [
+      'Alfa Romeo', 'Aston Martin', 'Audi', 'BMW', 'Citroen', 'Citroën', 'Cupra',
+      'Dacia', 'DS', 'Ferrari', 'Fiat', 'Ford', 'Honda', 'Hyundai', 'Jaguar',
+      'Jeep', 'Kia', 'Land Rover', 'Lexus', 'Maserati', 'Mazda', 'Mercedes-Benz',
+      'Mercedes', 'MG', 'Mini', 'Mitsubishi', 'Nissan', 'Opel', 'Peugeot',
+      'Porsche', 'Renault', 'Seat', 'Škoda', 'Skoda', 'Smart', 'Subaru',
+      'Suzuki', 'Tesla', 'Toyota', 'Volkswagen', 'Volvo'
+    ];
+
+    for (const b of KNOWN_BRANDS) {
+      const bRegex = new RegExp(`\\b${b}\\b`, 'i');
+      if (bRegex.test(fullText)) {
+        result.brand = b.replace('Mercedes-Benz', 'Mercedes').replace('Škoda', 'Skoda');
+        const modelRegex = new RegExp(`\\b${b}\\s+([A-Za-z0-9áéíóúÁÉÍÓÚ+.-]+(?:\\s+[A-Za-z0-9áéíóúÁÉÍÓÚ+.-]+)?)`, 'i');
+        const mMatch = fullText.match(modelRegex);
+        if (mMatch && mMatch[1]) {
+          const candidate = mMatch[1].trim();
+          if (!/^(con|de|del|matricula|matrícula|para|por|en|y|es|km|kilometros)$/i.test(candidate)) {
+            result.model = candidate;
+          }
+        }
+        break;
+      }
+    }
+
+    // Patrón específico en respuesta de la IA: "para la revisión de tu [Marca] [Modelo] - matrícula [Matrícula]"
+    const aiCarPattern = /(?:de tu|de su|del)\s+\*?([A-Za-zÁÉÍÓÚáéíóú]+(?:\s+[A-Za-z0-9ÁÉÍÓÚáéíóú.-]+)?)\*?\s*-\s*matr[íi]cula/i;
+    const aiCarMatch = aiText.match(aiCarPattern);
+    if (aiCarMatch && aiCarMatch[1]) {
+      const parts = aiCarMatch[1].trim().split(/\s+/);
+      if (!result.brand && parts.length > 0) result.brand = parts[0];
+      if (!result.model && parts.length > 1) result.model = parts.slice(1).join(' ');
+    }
+
+    // 6. Kilometraje
+    const kmRegex = /\b([0-9]{1,3}(?:\.[0-9]{3})+|[0-9]{2,6})\s*(?:km|kms|kilometros|kilómetros)\b/i;
+    const kmMatch = fullText.match(kmRegex);
+    if (kmMatch) {
+      result.mileage = parseInt(kmMatch[1].replace(/\./g, ''), 10) || 0;
+    } else {
+      for (const m of userMessages) {
+        const pureNum = (m.text || '').trim().match(/^([0-9]{4,6})$/);
+        if (pureNum) {
+          result.mileage = parseInt(pureNum[1], 10);
+          break;
+        }
+      }
+    }
+
+    // 7. Nombre completo del cliente
+    const namePatterns = [
+      /(?:me llamo|mi nombre es|nombre(?:\s*es)?[:\s]+|soy)\s+([A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}(?:\s+[A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}){1,3})/i,
+      /(?:perfecto|hola|estimado|estimada|gracias),?\s+([A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}(?:\s+[A-Za-zÁÉÍÓÚáéíóúñÑ]{2,})?)[.!,]/i
+    ];
+    for (const pat of namePatterns) {
+      const nMatch = fullText.match(pat);
+      if (nMatch && nMatch[1]) {
+        const cand = nMatch[1].trim();
+        if (!/^(cliente|taller|asistente|buenos|buenas|muchas|gracias|vamos|proceder)$/i.test(cand)) {
+          result.fullName = cand;
+          break;
+        }
+      }
+    }
+
+    // 8. Dirección
+    const addrMatch = userText.match(/(?:vivo en|direccion|dirección|calle|avda|avenida)[:\s]+([^,\n]+(?:,\s*[^,\n]+)?)/i);
+    if (addrMatch && addrMatch[1]) {
+      result.address = addrMatch[1].trim();
+    }
+
+    // 9. Motivo o problema
+    const problemMatch = aiText.match(/para (?:la|el)\s+\*?([^*.\n]+)\*?\s+de/i);
+    if (problemMatch && problemMatch[1]) {
+      result.problemDescription = problemMatch[1].trim();
+    }
+
+    return result;
+  };
+
   // Enviar mensaje desde el Simulador de WhatsApp y conectarlo con n8n / Agente IA
   const sendWhatsAppChatMessage = async (orderId, text, senderRole = 'client') => {
     let targetOrder = (orderId === DEFAULT_CHAT_ORDER.id)
@@ -890,11 +1029,47 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
               !replyLower.includes('antes de continuar');
 
             if (isConfirmedCreation) {
-              const activeCli = matchedClient || targetOrder.client || { fullName: 'Cliente' };
-              const activeVeh = selectedVehicle || targetOrder.vehicle || {};
+              const parsed = parseClientAndVehicleFromConversation(aiReply, chatHistory, text, activeDni);
+
+              const activeCli = (matchedClient && matchedClient.dniNif) ? matchedClient : {
+                fullName: parsed.fullName || (targetOrder.client?.fullName !== 'Cliente de WhatsApp' ? targetOrder.client?.fullName : '') || 'Nuevo Cliente',
+                dniNif: parsed.dniNif || activeDni || (targetOrder.client?.dniNif || ''),
+                phone: parsed.phone || (targetOrder.client?.phone || ''),
+                email: parsed.email || (targetOrder.client?.email || ''),
+                address: parsed.address || (targetOrder.client?.address || 'Registrado por WhatsApp')
+              };
+
+              const activeVeh = (selectedVehicle && selectedVehicle.brand && selectedVehicle.brand !== 'Vehículo') ? selectedVehicle : {
+                brand: parsed.brand || (targetOrder.vehicle?.brand !== 'Vehículo' ? targetOrder.vehicle?.brand : '') || 'Vehículo',
+                model: parsed.model || targetOrder.vehicle?.model || '',
+                licensePlate: parsed.licensePlate || targetOrder.vehicle?.licensePlate || '',
+                vin: parsed.vin || targetOrder.vehicle?.vin || '',
+                mileage: parsed.mileage || targetOrder.vehicle?.mileage || 0,
+                entryDate: new Date().toISOString().split('T')[0]
+              };
+
+              // Si es un cliente nuevo no registrado previamente, guardarlo inmediatamente en Fichas Clientes
+              if (!matchedClient || !matchedClient.dniNif) {
+                if (activeCli.fullName && (activeCli.dniNif || activeCli.phone)) {
+                  addClient(activeCli, activeVeh);
+                  setChatSessionClients(prev => ({
+                    ...prev,
+                    [sessionKey]: { ...activeCli, vehicles: activeVeh.licensePlate ? [activeVeh] : [] },
+                    'ORD-NUEVA-RECEPCION': { ...activeCli, vehicles: activeVeh.licensePlate ? [activeVeh] : [] }
+                  }));
+                  if (activeVeh.licensePlate) {
+                    setChatSessionVehicles(prev => ({
+                      ...prev,
+                      [sessionKey]: activeVeh,
+                      'ORD-NUEVA-RECEPCION': activeVeh
+                    }));
+                  }
+                  addToast(`👤 Ficha creada: ${activeCli.fullName} (${activeVeh.brand} ${activeVeh.model})`, 'success');
+                }
+              }
 
               // Extraer motivo de la avería o revisión del texto o del historial
-              let detectedProblem = 'Revisión periódica y mantenimiento';
+              let detectedProblem = parsed.problemDescription || 'Revisión periódica y mantenimiento';
               const problemMatch = aiReply.match(/para (?:la|el)\s+\*?([^*.\n]+)\*?\s+de/i);
               if (problemMatch && problemMatch[1]) {
                 detectedProblem = problemMatch[1].trim();

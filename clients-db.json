@@ -21,6 +21,14 @@
         "vin": "VSSZZZ1K2V123456",
         "mileage": 79000,
         "entryDate": "2026-11-14"
+      },
+      {
+        "brand": "Seat",
+        "model": "Ibiza",
+        "licensePlate": "1234KGB",
+        "vin": "VSSZZZ6JZDR123456",
+        "mileage": 68500,
+        "entryDate": "2026-11-15"
       }
     ]
   }
