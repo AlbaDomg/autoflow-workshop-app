@@ -1438,14 +1438,12 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
       });
 
       if (response.ok) {
-        addToast(`⚡ Datos enviados a n8n (${event})`, 'info');
+        console.log(`⚡ Datos sincronizados con n8n (${event})`);
       } else {
         console.warn('Respuesta de n8n no OK:', response.status);
-        addToast(`⚠️ n8n respondió con estado ${response.status}. ¿Está el workflow en modo Listen/Test?`, 'warning');
       }
     } catch (err) {
-      console.error('Error conectando con webhook de n8n:', err);
-      addToast('⚠️ No se pudo conectar con n8n en localhost:5678 (verifica que el webhook esté escuchando)', 'warning');
+      console.warn('Webhook de n8n no disponible:', err);
     }
   };
 
