@@ -20,7 +20,7 @@ export default async function handler(req, res) {
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
     
-    const tunnelBase = process.env.VITE_TUNNEL_URL || 'https://thirty-feet-play.loca.lt';
+    const tunnelBase = process.env.VITE_TUNNEL_URL || 'https://talleres-naranjo-ia.loca.lt';
     const defaultChatWebhook = `${tunnelBase}/webhook/d6f83c61-7d73-455b-80bb-22ae34725228/chat`;
 
     // URL destino de n8n
