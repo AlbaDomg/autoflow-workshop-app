@@ -861,7 +861,9 @@ export const WorkshopProvider = ({ children }) => {
       }));
     }
 
-    if (matchedClient) {
+    // Solo vincular a una orden existente si el usuario abrió explícitamente el chat desde la tarjeta de esa orden concreta
+    // Si estamos en 'ORD-NUEVA-RECEPCION', JAMÁS secuestrar una orden antigua para no resucitar coches o averías viejas
+    if (matchedClient && targetOrder.id !== 'ORD-NUEVA-RECEPCION' && orderId !== 'ORD-NUEVA-RECEPCION') {
       const matchedOrderForClient = orders.find(
         o =>
           (matchedClient.dniNif && o.client?.dniNif?.toLowerCase() === matchedClient.dniNif.toLowerCase()) ||
@@ -905,7 +907,8 @@ export const WorkshopProvider = ({ children }) => {
       }
     }
 
-    const selectedVehicle = activeVehicle || clientVehicles[0] || targetOrder.vehicle;
+    // Si el cliente tiene varios vehículos y aún no ha seleccionado ninguno, selectedVehicle DEBE ser null
+    const selectedVehicle = activeVehicle || (clientVehicles.length === 1 ? clientVehicles[0] : null);
     const hasMultipleVehicles = isExistingClient && clientVehicles.length > 1;
 
     const portalUrl = getPortalUrl(targetOrder);
@@ -1068,7 +1071,7 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
               }
             }
             if (!detectedProblem) {
-              detectedProblem = parsed.problemDescription || (targetOrder.problemDescription !== 'Avería comunicada por el cliente por WhatsApp' ? targetOrder.problemDescription : '') || 'Revisión periódica y mantenimiento';
+              detectedProblem = parsed.problemDescription || (targetOrder.id !== 'ORD-NUEVA-RECEPCION' && targetOrder.problemDescription !== 'Avería comunicada por el cliente por WhatsApp' ? targetOrder.problemDescription : '') || '';
             }
 
             // 2. Extraer fecha y hora de la cita agendada si se menciona
@@ -1078,22 +1081,45 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
               appointmentNotice = `Cita agendada: ${apptMatch[1].replace(/\*/g, '').trim()}`;
             }
 
-            // 3. Condición universal: cualquier confirmación de tarjeta, visita, cita o registro
-            const isConfirmedCreation =
-              // A) Mención explícita de tarjeta
-              replyLower.includes('tarjeta') ||
-              // B) Mención de visita registrada en el sistema (como en "He registrado tu visita en el sistema")
-              (replyLower.includes('visita') && (replyLower.includes('registrad') || replyLower.includes('sistema') || replyLower.includes('recibid'))) ||
-              // C) Mención de cita agendada o confirmada (como en "Tu cita ha sido agendada con éxito")
-              (replyLower.includes('cita') && (replyLower.includes('agendad') || replyLower.includes('confirmad') || replyLower.includes('éxito') || replyLower.includes('exito') || replyLower.includes('programad'))) ||
-              // D) Mención de bienvenida o cita en el taller (como en "Te esperamos en el taller para diagnosticar...")
-              replyLower.includes('esperamos en el taller') ||
-              // E) Diagnóstico con importe de 50€ comunicado formalmente
-              (replyLower.includes('diagnóstico') && (replyLower.includes('50') || replyLower.includes('coste'))) ||
-              // F) Recepción formal
-              replyLower.includes('recepci') ||
-              // G) Si hay vehículo activo y un problema detectado en la conversación
-              (Boolean(detectedProblem) && detectedProblem !== 'Revisión periódica y mantenimiento' && (Boolean(selectedVehicle?.brand) || Boolean(activeVehicle?.brand) || Boolean(parsed.brand)));
+            // 3. Determinar si el cliente ya eligió / aportó un vehículo específico para esta cita
+            const candidateVehicle = activeVehicle || selectedVehicle || (parsed.brand && (parsed.licensePlate || parsed.model) ? {
+              brand: parsed.brand,
+              model: parsed.model || '',
+              licensePlate: parsed.licensePlate || '',
+              vin: parsed.vin || '',
+              mileage: parsed.mileage || 0,
+              entryDate: new Date().toISOString().split('T')[0]
+            } : null);
+
+            const hasChosenVehicle = Boolean(
+              candidateVehicle &&
+              candidateVehicle.brand &&
+              candidateVehicle.brand !== 'Vehículo' &&
+              (candidateVehicle.licensePlate || candidateVehicle.model)
+            );
+
+            // 4. Determinar si se ha comunicado un motivo o avería real para esta visita
+            const hasRealProblem = Boolean(detectedProblem) &&
+              detectedProblem !== 'Revisión periódica y mantenimiento' &&
+              detectedProblem !== 'Revisión y diagnóstico en taller' &&
+              detectedProblem !== 'Avería comunicada por el cliente por WhatsApp';
+
+            // 5. Determinar si la IA solo está saludando o haciendo preguntas exploratorias (ej: "¿Con cuál de ellos vienes? Cuéntame el motivo")
+            const isAskingQuestion = /(?:¿?con cu[aá]l de ellos|cu[eé]ntame el motivo|ind[ií]came el motivo|¿?qu[eé] d[ií]a|en qu[eé] puedo ayudarte|podr[ií]as proporcionarme)/i.test(aiReply);
+
+            // 6. Determinar si la IA ha confirmado formalmente la visita o cita
+            const hasAiConfirmation =
+              /(?:he\s+registrado|queda\s+registrada|hemos\s+registrado)\s+(?:tu|su)?\s*visita/i.test(aiReply) ||
+              /(?:cita\s+(?:ha sido\s+)?agendada|cita\s+confirmada|cita\s+programada)/i.test(aiReply) ||
+              /(?:tarjeta\s+de\s+recepci[oó]n|generado\s+la\s+tarjeta|creada\s+la\s+tarjeta|tarjeta\s+generada)/i.test(aiReply) ||
+              /(?:te\s+esperamos|le\s+esperamos)\s+en\s+el\s+taller/i.test(aiReply) ||
+              (replyLower.includes('diagnóstico') && (replyLower.includes('50') || replyLower.includes('coste')) && hasRealProblem);
+
+            // REGLA DE ORO: La tarjeta en Recepción SOLO se crea si el cliente ya eligió vehículo y la IA confirmó o indicó diagnóstico
+            const isConfirmedCreation = hasChosenVehicle && (
+              hasAiConfirmation ||
+              (hasRealProblem && !isAskingQuestion)
+            );
 
             if (isConfirmedCreation) {
               const activeCli = (matchedClient && matchedClient.dniNif) ? matchedClient : {
@@ -1104,16 +1130,14 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
                 address: parsed.address || (targetOrder.client?.address || 'Registrado por WhatsApp')
               };
 
-              const activeVeh = (selectedVehicle && selectedVehicle.brand && selectedVehicle.brand !== 'Vehículo') ? selectedVehicle : (
-                (activeVehicle && activeVehicle.brand && activeVehicle.brand !== 'Vehículo') ? activeVehicle : {
-                  brand: parsed.brand || (targetOrder.vehicle?.brand !== 'Vehículo' ? targetOrder.vehicle?.brand : '') || 'Vehículo',
-                  model: parsed.model || targetOrder.vehicle?.model || '',
-                  licensePlate: parsed.licensePlate || targetOrder.vehicle?.licensePlate || '',
-                  vin: parsed.vin || targetOrder.vehicle?.vin || '',
-                  mileage: parsed.mileage || targetOrder.vehicle?.mileage || 0,
-                  entryDate: new Date().toISOString().split('T')[0]
-                }
-              );
+              const activeVeh = candidateVehicle || {
+                brand: parsed.brand || 'Vehículo',
+                model: parsed.model || '',
+                licensePlate: parsed.licensePlate || '',
+                vin: parsed.vin || '',
+                mileage: parsed.mileage || 0,
+                entryDate: new Date().toISOString().split('T')[0]
+              };
 
               // Si es un cliente nuevo no registrado previamente, guardarlo inmediatamente en Fichas Clientes
               if (!matchedClient || !matchedClient.dniNif) {
@@ -1138,7 +1162,7 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
               createOrUpdateOrderInRecepcion({
                 client: activeCli,
                 vehicle: activeVeh,
-                problemDescription: detectedProblem,
+                problemDescription: detectedProblem || 'Revisión y diagnóstico en taller',
                 clientAnomaliesReport: appointmentNotice || targetOrder.clientAnomaliesReport || 'Notificado y registrado desde WhatsApp',
                 status: 'recepcion'
               });
