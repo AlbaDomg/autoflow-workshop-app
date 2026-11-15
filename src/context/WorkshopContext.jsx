@@ -863,17 +863,6 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
               text: aiReply,
               portalUrl: aiReply.includes('/portal/') ? portalUrl : null
             });
-
-            // Crear o actualizar automáticamente la tarjeta en Recepción
-            const activeVeh = selectedVehicle || targetOrder.vehicle;
-            const activeCli = matchedClient || targetOrder.client;
-            if (activeVeh?.licensePlate || activeCli?.fullName || activeCli?.dniNif) {
-              createOrUpdateOrderInRecepcion({
-                client: activeCli,
-                vehicle: activeVeh,
-                problemDescription: targetOrder.problemDescription || text.trim() || 'Cita concertada con Asistente Virtual IA'
-              });
-            }
           } else if (result?.data?.message === 'Error in workflow' || result?.message === 'Error in workflow') {
             addToast('⚠️ Error en la ejecución de n8n (revisa el panel de Executions en n8n)', 'warning');
           }
