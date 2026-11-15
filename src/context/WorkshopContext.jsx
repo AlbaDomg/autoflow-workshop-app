@@ -885,16 +885,39 @@ export const WorkshopProvider = ({ children }) => {
     let activeVehicle = rememberedVehicle;
     if (matchedClient && clientVehicles.length > 0) {
       const msgClean = text.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const foundVeh = clientVehicles.find(v => {
-        const bClean = (v.brand || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-        const mClean = (v.model || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+      // 1. Coincidencia por matrícula exacta (máxima prioridad)
+      let foundVeh = clientVehicles.find(v => {
         const pClean = (v.licensePlate || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-        return (
-          (bClean && msgClean.includes(bClean)) ||
-          (mClean && msgClean.includes(mClean)) ||
-          (pClean && msgClean.includes(pClean))
-        );
+        return pClean && pClean.length >= 4 && msgClean.includes(pClean);
       });
+
+      // 2. Coincidencia por MODELO específico (ej: "ibiza" vs "panda", "q5" vs "a3")
+      // ¡Prioridad absoluta al modelo para no confundir coches de la misma marca!
+      if (!foundVeh) {
+        foundVeh = clientVehicles.find(v => {
+          const mClean = (v.model || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          return mClean && mClean.length >= 2 && msgClean.includes(mClean);
+        });
+      }
+
+      // 3. Coincidencia por MARCA + MODELO combinados (ej: "seatibiza", "seatpanda")
+      if (!foundVeh) {
+        foundVeh = clientVehicles.find(v => {
+          const bmClean = `${v.brand || ''}${v.model || ''}`.toLowerCase().replace(/[^a-z0-9]/g, '');
+          return bmClean && msgClean.includes(bmClean);
+        });
+      }
+
+      // 4. Coincidencia por marca SOLO SI es el único coche del cliente que tiene esa marca
+      if (!foundVeh) {
+        foundVeh = clientVehicles.find(v => {
+          const bClean = (v.brand || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          const sameBrandCount = clientVehicles.filter(cv => (cv.brand || '').toLowerCase().replace(/[^a-z0-9]/g, '') === bClean).length;
+          return bClean && sameBrandCount === 1 && msgClean.includes(bClean);
+        });
+      }
+
       if (foundVeh) {
         activeVehicle = foundVeh;
         setChatSessionVehicles(prev => ({
@@ -1081,8 +1104,26 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
               appointmentNotice = `Cita agendada: ${apptMatch[1].replace(/\*/g, '').trim()}`;
             }
 
-            // 3. Determinar si el cliente ya eligió / aportó un vehículo específico para esta cita
-            const candidateVehicle = activeVehicle || selectedVehicle || (parsed.brand && (parsed.licensePlate || parsed.model) ? {
+            // 3. Determinar el vehículo exacto mediante doble comprobación infalible:
+            // A) Si la IA cita expresamente la matrícula o modelo en su confirmación (prioridad absoluta)
+            const aiReplyClean = aiReply.toLowerCase().replace(/[^a-z0-9]/g, '');
+            let aiMatchedVehicle = null;
+            if (Array.isArray(clientVehicles) && clientVehicles.length > 0) {
+              // Prioridad 1: Por matrícula mencionada por la IA (ej: "1234kgb")
+              aiMatchedVehicle = clientVehicles.find(v => {
+                const pClean = (v.licensePlate || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                return pClean && pClean.length >= 4 && aiReplyClean.includes(pClean);
+              });
+              // Prioridad 2: Por modelo específico mencionado por la IA (ej: "ibiza" vs "panda")
+              if (!aiMatchedVehicle) {
+                aiMatchedVehicle = clientVehicles.find(v => {
+                  const mClean = (v.model || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                  return mClean && mClean.length >= 2 && aiReplyClean.includes(mClean);
+                });
+              }
+            }
+
+            const candidateVehicle = aiMatchedVehicle || activeVehicle || selectedVehicle || (parsed.brand && (parsed.licensePlate || parsed.model) ? {
               brand: parsed.brand,
               model: parsed.model || '',
               licensePlate: parsed.licensePlate || '',
