@@ -4,7 +4,7 @@ import { generateSignedOrderPdf } from '../utils/pdfGenerator';
 const WorkshopContext = createContext();
 
 // URL del Webhook de Chat en n8n
-export const DEFAULT_WA_WEBHOOK_URL = import.meta.env.VITE_N8N_CHAT_WEBHOOK_URL || 'http://localhost:5678/webhook/d6f83c61-7d73-455b-80bb-22ae34725228/chat';
+export const DEFAULT_WA_WEBHOOK_URL = import.meta.env.VITE_N8N_CHAT_WEBHOOK_URL || 'https://whole-cycles-turn.loca.lt/webhook/d6f83c61-7d73-455b-80bb-22ae34725228/chat';
 
 // URL del Webhook de n8n (usamos el proxy local de Vite para evitar bloqueos CORS)
 export const N8N_WEBHOOK_URL = '/api/n8n-webhook';
@@ -437,7 +437,7 @@ export const WorkshopProvider = ({ children }) => {
   }, [activeWaOrderId]);
   const [waWebhookUrl, setWaWebhookUrl] = useState(() => {
     const saved = localStorage.getItem('autoflow_wa_webhook_url');
-    if (!saved || saved.includes('talleres-naranjo')) {
+    if (!saved || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && saved.includes('localhost:5678'))) {
       return DEFAULT_WA_WEBHOOK_URL;
     }
     return saved;

@@ -133,14 +133,22 @@ function n8nApiPlugin() {
             try {
               let response = await fetch(customUrl, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                  'Content-Type': 'application/json',
+                  'Bypass-Tunnel-Reminder': 'true',
+                  'bypass-tunnel-reminder': 'true'
+                },
                 body: forwardBody
               });
 
               if (response.status === 404 && altUrl !== customUrl) {
                 const fallbackResp = await fetch(altUrl, {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
+                  headers: { 
+                    'Content-Type': 'application/json',
+                    'Bypass-Tunnel-Reminder': 'true',
+                    'bypass-tunnel-reminder': 'true'
+                  },
                   body: forwardBody
                 });
                 if (fallbackResp.ok) {
