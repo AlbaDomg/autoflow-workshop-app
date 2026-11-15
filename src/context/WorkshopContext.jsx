@@ -413,44 +413,50 @@ export const WorkshopProvider = ({ children }) => {
         setClients(prev => migrateClientsList(prev));
       });
 
-    // Sincronizar órdenes con la base de datos backend (orders-db.json)
-    fetch('/api/orders')
-      .then(r => r.json())
-      .then(res => {
-        if (res && res.success && Array.isArray(res.orders) && res.orders.length > 0) {
-          const deleted = new Set(JSON.parse(localStorage.getItem('autoflow_deleted_order_ids') || '[]'));
-          const validDbOrders = res.orders.filter(o => o && !deleted.has(o.id));
-          setOrders(prev => {
-            const merged = [...prev];
-            validDbOrders.forEach(dbOrder => {
-              const idx = merged.findIndex(o => o.id === dbOrder.id);
-              if (idx >= 0) {
-                // Preservar valores de diagnóstico y presupuesto sin permitir que un 0 sobreescriba un importe real
-                const localSubtotal = parseFloat(merged[idx].financials?.repairSubtotal) || 0;
-                const dbSubtotal = parseFloat(dbOrder.financials?.repairSubtotal) || 0;
-                const finalSubtotal = Math.max(localSubtotal, dbSubtotal);
+    // Sincronizar órdenes con la base de datos backend (orders-db.json) y mantener sondeo en tiempo real
+    const syncOrdersWithBackend = () => {
+      fetch('/api/orders')
+        .then(r => r.json())
+        .then(res => {
+          if (res && res.success && Array.isArray(res.orders) && res.orders.length > 0) {
+            const deleted = new Set(JSON.parse(localStorage.getItem('autoflow_deleted_order_ids') || '[]'));
+            const validDbOrders = res.orders.filter(o => o && !deleted.has(o.id));
+            setOrders(prev => {
+              const merged = [...prev];
+              validDbOrders.forEach(dbOrder => {
+                const idx = merged.findIndex(o => o.id === dbOrder.id);
+                if (idx >= 0) {
+                  // Preservar valores de diagnóstico y presupuesto sin permitir que un 0 sobreescriba un importe real
+                  const localSubtotal = parseFloat(merged[idx].financials?.repairSubtotal) || 0;
+                  const dbSubtotal = parseFloat(dbOrder.financials?.repairSubtotal) || 0;
+                  const finalSubtotal = Math.max(localSubtotal, dbSubtotal);
 
-                merged[idx] = {
-                  ...dbOrder,
-                  ...merged[idx],
-                  financials: {
-                    ...dbOrder.financials,
-                    ...merged[idx].financials,
-                    repairSubtotal: finalSubtotal,
-                    totalDue: finalSubtotal > 0 && (merged[idx].financials?.hasAcceptedRepair === 'approved' || dbOrder.financials?.hasAcceptedRepair === 'approved')
-                      ? parseFloat((finalSubtotal * (1 + (merged[idx].financials?.taxRate || 0.21))).toFixed(2))
-                      : (merged[idx].financials?.totalDue || dbOrder.financials?.totalDue)
-                  }
-                };
-              } else {
-                merged.unshift(dbOrder);
-              }
+                  merged[idx] = {
+                    ...dbOrder,
+                    ...merged[idx],
+                    financials: {
+                      ...dbOrder.financials,
+                      ...merged[idx].financials,
+                      repairSubtotal: finalSubtotal,
+                      totalDue: finalSubtotal > 0 && (merged[idx].financials?.hasAcceptedRepair === 'approved' || dbOrder.financials?.hasAcceptedRepair === 'approved')
+                        ? parseFloat((finalSubtotal * (1 + (merged[idx].financials?.taxRate || 0.21))).toFixed(2))
+                        : (merged[idx].financials?.totalDue || dbOrder.financials?.totalDue)
+                    }
+                  };
+                } else {
+                  merged.unshift(dbOrder);
+                }
+              });
+              return ensureOrdersHaveTokens(merged);
             });
-            return ensureOrdersHaveTokens(merged);
-          });
-        }
-      })
-      .catch(() => {});
+          }
+        })
+        .catch(() => {});
+    };
+
+    syncOrdersWithBackend();
+    const orderSyncInterval = setInterval(syncOrdersWithBackend, 4000);
+    return () => clearInterval(orderSyncInterval);
   }, []);
 
   useEffect(() => {
@@ -1018,19 +1024,78 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
               portalUrl: aiReply.includes('/portal/') ? portalUrl : null
             });
 
-            // Detectar si la IA ha confirmado formalmente la generación de la tarjeta de recepción
+            // Detección infalible de confirmación de visita, cita o tarjeta de recepción
             const replyLower = aiReply.toLowerCase();
+            const parsed = parseClientAndVehicleFromConversation(aiReply, chatHistory, text, activeDni);
+
+            // 1. Extraer motivo de la avería o revisión con máxima cobertura
+            let detectedProblem = '';
+            const motivoMatch = aiReply.match(/(?:motivo\s+es\s+(?:que\s+)?(?:el\s+|la\s+)?|motivo:\s*\*?)\*?([^*.\n]+)\*?/i);
+            if (motivoMatch && motivoMatch[1]) {
+              detectedProblem = motivoMatch[1].trim();
+            }
+            if (!detectedProblem) {
+              const diagMatch = aiReply.match(/para diagnosticar (?:el problema con )?(?:el |la )?\*?([^*.\n]+)\*? del?/i);
+              if (diagMatch && diagMatch[1]) {
+                detectedProblem = diagMatch[1].trim();
+              }
+            }
+            if (!detectedProblem) {
+              const problemMatch = aiReply.match(/para (?:la|el)\s+\*?([^*.\n]+)\*?\s+de/i);
+              if (problemMatch && problemMatch[1]) {
+                detectedProblem = problemMatch[1].trim();
+              }
+            }
+            if (!detectedProblem) {
+              const diagMatch2 = aiReply.match(/diagnosticar\s+\*?([^*.\n]+)\*?/i);
+              if (diagMatch2 && diagMatch2[1]) {
+                detectedProblem = diagMatch2[1].trim();
+              }
+            }
+            if (!detectedProblem) {
+              const lastProblemMsg = chatHistory
+                .slice()
+                .reverse()
+                .find(m =>
+                  m.sender === 'client' &&
+                  m.text.length > 3 &&
+                  !m.text.match(/^[0-9]+$/) &&
+                  !m.text.match(/^(hola|buenas|si|no|ok|vale|mañana|tarde|lunes|martes|miercoles|jueves|viernes)/i) &&
+                  !m.text.match(/\b([0-9XYZxyz][0-9]{7}[A-Za-z]|[0-9]{8}[A-Za-z])\b/)
+                );
+              if (lastProblemMsg && lastProblemMsg.text) {
+                detectedProblem = lastProblemMsg.text;
+              }
+            }
+            if (!detectedProblem) {
+              detectedProblem = parsed.problemDescription || (targetOrder.problemDescription !== 'Avería comunicada por el cliente por WhatsApp' ? targetOrder.problemDescription : '') || 'Revisión periódica y mantenimiento';
+            }
+
+            // 2. Extraer fecha y hora de la cita agendada si se menciona
+            let appointmentNotice = '';
+            const apptMatch = aiReply.match(/(?:cita\s+(?:ha sido\s+)?agendada|cita\s+confirmada|cita\s+programada)[^.\n]*para\s+([^*.\n]+|\*[^*]+\*)/i);
+            if (apptMatch && apptMatch[1]) {
+              appointmentNotice = `Cita agendada: ${apptMatch[1].replace(/\*/g, '').trim()}`;
+            }
+
+            // 3. Condición universal: cualquier confirmación de tarjeta, visita, cita o registro
             const isConfirmedCreation =
-              (replyLower.includes('tarjeta') &&
-                (replyLower.includes('generad') || replyLower.includes('cread') || replyLower.includes('registrad')) &&
-                (replyLower.includes('recepci') || replyLower.includes('éxito') || replyLower.includes('exito') || replyLower.includes('taller'))) &&
-              !replyLower.includes('vamos a proceder') &&
-              !replyLower.includes('voy a necesitar') &&
-              !replyLower.includes('antes de continuar');
+              // A) Mención explícita de tarjeta
+              replyLower.includes('tarjeta') ||
+              // B) Mención de visita registrada en el sistema (como en "He registrado tu visita en el sistema")
+              (replyLower.includes('visita') && (replyLower.includes('registrad') || replyLower.includes('sistema') || replyLower.includes('recibid'))) ||
+              // C) Mención de cita agendada o confirmada (como en "Tu cita ha sido agendada con éxito")
+              (replyLower.includes('cita') && (replyLower.includes('agendad') || replyLower.includes('confirmad') || replyLower.includes('éxito') || replyLower.includes('exito') || replyLower.includes('programad'))) ||
+              // D) Mención de bienvenida o cita en el taller (como en "Te esperamos en el taller para diagnosticar...")
+              replyLower.includes('esperamos en el taller') ||
+              // E) Diagnóstico con importe de 50€ comunicado formalmente
+              (replyLower.includes('diagnóstico') && (replyLower.includes('50') || replyLower.includes('coste'))) ||
+              // F) Recepción formal
+              replyLower.includes('recepci') ||
+              // G) Si hay vehículo activo y un problema detectado en la conversación
+              (Boolean(detectedProblem) && detectedProblem !== 'Revisión periódica y mantenimiento' && (Boolean(selectedVehicle?.brand) || Boolean(activeVehicle?.brand) || Boolean(parsed.brand)));
 
             if (isConfirmedCreation) {
-              const parsed = parseClientAndVehicleFromConversation(aiReply, chatHistory, text, activeDni);
-
               const activeCli = (matchedClient && matchedClient.dniNif) ? matchedClient : {
                 fullName: parsed.fullName || (targetOrder.client?.fullName !== 'Cliente de WhatsApp' ? targetOrder.client?.fullName : '') || 'Nuevo Cliente',
                 dniNif: parsed.dniNif || activeDni || (targetOrder.client?.dniNif || ''),
@@ -1039,14 +1104,16 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
                 address: parsed.address || (targetOrder.client?.address || 'Registrado por WhatsApp')
               };
 
-              const activeVeh = (selectedVehicle && selectedVehicle.brand && selectedVehicle.brand !== 'Vehículo') ? selectedVehicle : {
-                brand: parsed.brand || (targetOrder.vehicle?.brand !== 'Vehículo' ? targetOrder.vehicle?.brand : '') || 'Vehículo',
-                model: parsed.model || targetOrder.vehicle?.model || '',
-                licensePlate: parsed.licensePlate || targetOrder.vehicle?.licensePlate || '',
-                vin: parsed.vin || targetOrder.vehicle?.vin || '',
-                mileage: parsed.mileage || targetOrder.vehicle?.mileage || 0,
-                entryDate: new Date().toISOString().split('T')[0]
-              };
+              const activeVeh = (selectedVehicle && selectedVehicle.brand && selectedVehicle.brand !== 'Vehículo') ? selectedVehicle : (
+                (activeVehicle && activeVehicle.brand && activeVehicle.brand !== 'Vehículo') ? activeVehicle : {
+                  brand: parsed.brand || (targetOrder.vehicle?.brand !== 'Vehículo' ? targetOrder.vehicle?.brand : '') || 'Vehículo',
+                  model: parsed.model || targetOrder.vehicle?.model || '',
+                  licensePlate: parsed.licensePlate || targetOrder.vehicle?.licensePlate || '',
+                  vin: parsed.vin || targetOrder.vehicle?.vin || '',
+                  mileage: parsed.mileage || targetOrder.vehicle?.mileage || 0,
+                  entryDate: new Date().toISOString().split('T')[0]
+                }
+              );
 
               // Si es un cliente nuevo no registrado previamente, guardarlo inmediatamente en Fichas Clientes
               if (!matchedClient || !matchedClient.dniNif) {
@@ -1068,27 +1135,11 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
                 }
               }
 
-              // Extraer motivo de la avería o revisión del texto o del historial
-              let detectedProblem = parsed.problemDescription || 'Revisión periódica y mantenimiento';
-              const problemMatch = aiReply.match(/para (?:la|el)\s+\*?([^*.\n]+)\*?\s+de/i);
-              if (problemMatch && problemMatch[1]) {
-                detectedProblem = problemMatch[1].trim();
-              } else if (targetOrder.problemDescription && targetOrder.problemDescription !== 'Avería comunicada por el cliente por WhatsApp') {
-                detectedProblem = targetOrder.problemDescription;
-              } else {
-                const lastProblemMsg = chatHistory
-                  .slice()
-                  .reverse()
-                  .find(m => m.sender === 'client' && m.text.length > 5 && !m.text.match(/^[0-9]+$/));
-                if (lastProblemMsg && lastProblemMsg.text) {
-                  detectedProblem = lastProblemMsg.text;
-                }
-              }
-
               createOrUpdateOrderInRecepcion({
                 client: activeCli,
                 vehicle: activeVeh,
                 problemDescription: detectedProblem,
+                clientAnomaliesReport: appointmentNotice || targetOrder.clientAnomaliesReport || 'Notificado y registrado desde WhatsApp',
                 status: 'recepcion'
               });
             }
