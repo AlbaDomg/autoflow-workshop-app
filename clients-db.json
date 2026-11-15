@@ -1,0 +1,90 @@
+[
+  {
+    "dniNif": "77154132B",
+    "fullName": "Alba Dominguez Garcia",
+    "phone": "+34620922500",
+    "email": "albadege94@gmail.com",
+    "address": "Calle Estepona,1",
+    "vehicles": [
+      {
+        "brand": "Seat",
+        "model": "Panda",
+        "licensePlate": "8465MGZ",
+        "vin": "VSSZZZ1K2V1234567",
+        "mileage": 55000,
+        "entryDate": "2026-11-15",
+        "signedDocuments": [
+          {
+            "orderId": "ORD-2026-551",
+            "fileName": "Documento_Firmado_ORD-2026-551_8465MGZ.pdf",
+            "signedAt": "2026-11-15T00:52:26.353Z",
+            "decision": "approved",
+            "totalDue": 181.5
+          },
+          {
+            "orderId": "ORD-2026-155",
+            "fileName": "Documento_Firmado_ORD-2026-155_8465MGZ.pdf",
+            "signedAt": "2026-11-13T04:59:19.413Z",
+            "decision": "approved",
+            "totalDue": 1210
+          }
+        ]
+      },
+      {
+        "brand": "Seat",
+        "model": "Panda",
+        "licensePlate": "2534GHK",
+        "vin": "VSSZZZ1K2V123456",
+        "mileage": 79000,
+        "entryDate": "2026-11-14",
+        "signedDocuments": [
+          {
+            "orderId": "ORD-2026-325",
+            "fileName": "Documento_Firmado_ORD-2026-325_2534GHK.pdf",
+            "signedAt": "2026-11-14T04:37:37.580Z",
+            "decision": "approved",
+            "totalDue": 484
+          },
+          {
+            "orderId": "ORD-2026-547",
+            "fileName": "Documento_Firmado_ORD-2026-547_2534GHK.pdf",
+            "signedAt": "2026-11-13T05:03:13.921Z",
+            "decision": "rejected",
+            "totalDue": 60.5
+          },
+          {
+            "orderId": "ORD-2026-631",
+            "fileName": "Documento_Firmado_ORD-2026-631_2534GHK.pdf",
+            "signedAt": "2026-11-13T04:52:16.754Z",
+            "decision": "approved",
+            "totalDue": 181.5
+          },
+          {
+            "orderId": "ORD-2026-526",
+            "fileName": "Documento_Firmado_ORD-2026-526_2534GHK.pdf",
+            "signedAt": "2026-11-13T04:25:45.065Z",
+            "decision": "approved",
+            "totalDue": 968
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "dniNif": "8465MGZ",
+    "fullName": "Santiago Bayon Fernandez",
+    "phone": "+34628009560",
+    "email": "santiagobayonfernandez@gmail.com",
+    "address": "Calle Estepona,1",
+    "vehicles": [
+      {
+        "brand": "Audi",
+        "model": "Q5",
+        "licensePlate": "8465MGZ",
+        "vin": "VSSZZZ1K2V1234567",
+        "mileage": 55000,
+        "entryDate": "2026-11-15"
+      }
+    ]
+  }
+]
