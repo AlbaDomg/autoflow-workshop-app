@@ -256,7 +256,9 @@ export const WorkshopProvider = ({ children }) => {
 
   const [clients, setClients] = useState(() => {
     const saved = localStorage.getItem('autoflow_clients');
-    return migrateClientsList(saved ? JSON.parse(saved) : INITIAL_CLIENTS);
+    const deletedDnis = new Set(JSON.parse(localStorage.getItem('autoflow_deleted_client_dnis') || '[]'));
+    const raw = saved ? JSON.parse(saved) : INITIAL_CLIENTS;
+    return migrateClientsList(raw.filter(c => c && !deletedDnis.has(c.dniNif?.toUpperCase())));
   });
 
   const [mechanics] = useState(INITIAL_MECHANICS);
@@ -360,13 +362,22 @@ export const WorkshopProvider = ({ children }) => {
       .then(r => r.json())
       .then(res => {
         if (res && res.success && Array.isArray(res.clients) && res.clients.length > 0) {
+          const deletedDnis = new Set(JSON.parse(localStorage.getItem('autoflow_deleted_client_dnis') || '[]'));
+          const deletedPlates = new Set(JSON.parse(localStorage.getItem('autoflow_deleted_vehicle_plates') || '[]'));
+          const validDbClients = res.clients
+            .filter(c => c && !deletedDnis.has(c.dniNif?.toUpperCase()))
+            .map(c => ({
+              ...c,
+              vehicles: (c.vehicles || []).filter(v => v && !deletedPlates.has(v.licensePlate?.toUpperCase()))
+            }));
+
           setClients(prev => {
-            const merged = [...res.clients];
-            prev.forEach(localClient => {
+            const merged = [...validDbClients];
+            prev.filter(c => c && !deletedDnis.has(c.dniNif?.toUpperCase())).forEach(localClient => {
               const idx = merged.findIndex(c => c.dniNif?.toLowerCase() === localClient.dniNif?.toLowerCase());
               if (idx >= 0) {
                 const existingPlates = new Set((merged[idx].vehicles || []).map(v => v.licensePlate?.toUpperCase()));
-                const extraVehicles = (localClient.vehicles || []).filter(v => !existingPlates.has(v.licensePlate?.toUpperCase()));
+                const extraVehicles = (localClient.vehicles || []).filter(v => v && !existingPlates.has(v.licensePlate?.toUpperCase()) && !deletedPlates.has(v.licensePlate?.toUpperCase()));
                 merged[idx] = {
                   ...merged[idx],
                   ...localClient,
@@ -1706,15 +1717,23 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
     });
   };
 
-  // Eliminar un cliente del directorio y base de datos
+  // Eliminar un cliente del directorio y base de datos de forma permanente
   const deleteClient = async (dniNif) => {
     if (!dniNif) return;
-    setClients(prev => prev.filter(c => c.dniNif.toLowerCase() !== dniNif.toLowerCase()));
+    const cleanDni = dniNif.trim().toUpperCase();
+    setClients(prev => prev.filter(c => c.dniNif?.toUpperCase() !== cleanDni));
+    try {
+      const saved = JSON.parse(localStorage.getItem('autoflow_deleted_client_dnis') || '[]');
+      if (!saved.includes(cleanDni)) {
+        saved.push(cleanDni);
+        localStorage.setItem('autoflow_deleted_client_dnis', JSON.stringify(saved));
+      }
+    } catch {}
     try {
       await fetch('/api/clients/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dniNif })
+        body: JSON.stringify({ dniNif: cleanDni })
       });
     } catch (err) {
       console.warn('Error al sincronizar eliminación con backend:', err);
@@ -1750,21 +1769,29 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
     addToast(`🚙 Vehículo ${vehicleData.brand} ${vehicleData.model} (${vehicleData.licensePlate}) vinculado con éxito`, 'success');
   };
 
-  // Desvincular un vehículo de un cliente
+  // Desvincular un vehículo de un cliente de forma permanente
   const removeVehicleFromClient = async (dniNif, licensePlate) => {
     if (!dniNif || !licensePlate) return;
+    const cleanPlate = licensePlate.trim().toUpperCase();
+    try {
+      const saved = JSON.parse(localStorage.getItem('autoflow_deleted_vehicle_plates') || '[]');
+      if (!saved.includes(cleanPlate)) {
+        saved.push(cleanPlate);
+        localStorage.setItem('autoflow_deleted_vehicle_plates', JSON.stringify(saved));
+      }
+    } catch {}
 
     // Sincronizar inmediatamente con clients-db.json en disco
     fetch('/api/clients/unlink-vehicle', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dniNif, licensePlate })
+      body: JSON.stringify({ dniNif, licensePlate: cleanPlate })
     }).catch(() => {});
 
     setClients(prev => {
       const nextClients = prev.map(c => {
         if (c.dniNif.toLowerCase() !== dniNif.toLowerCase()) return c;
-        const newVehicles = (c.vehicles || []).filter(v => v.licensePlate.toLowerCase() !== licensePlate.toLowerCase());
+        const newVehicles = (c.vehicles || []).filter(v => v.licensePlate.toUpperCase() !== cleanPlate);
         return { ...c, vehicles: newVehicles };
       });
 
