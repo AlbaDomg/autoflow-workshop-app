@@ -200,157 +200,8 @@ const INITIAL_MECHANICS = [
   { id: 'MEC_003', name: 'David Sanz', specialty: 'Chapa, Pintura y Carrocería', status: 'active' }
 ];
 
-// Órdenes de prueba iniciales para poblar el Kanban
-const INITIAL_ORDERS = [
-  {
-    id: 'ORD-2026-001',
-    client: {
-      fullName: 'Javier Morales Navarro',
-      dniNif: '30291847K',
-      phone: '+34611223344',
-      email: 'javier.morales@email.com',
-      address: 'Gran Vía Marqués del Turia 45, Valencia'
-    },
-    vehicle: {
-      brand: 'Peugeot',
-      model: '308 1.2 PureTech',
-      licensePlate: '9843KJH',
-      vin: 'VF3LCB9HPFS123456',
-      mileage: 72000,
-      entryDate: '2026-07-14'
-    },
-    problemDescription: 'Testigo de motor encendido en amarillo. Pérdida de potencia en bajas revoluciones.',
-    clientAnomaliesReport: 'Tirones leves al salir en primera velocidad.',
-    initialPhotos: [
-      'https://images.unsplash.com/photo-1619642751034-765dfdf7c58e?auto=format&fit=crop&w=400&q=80',
-      'https://images.unsplash.com/photo-1517524206127-48bbd363f3d7?auto=format&fit=crop&w=400&q=80'
-    ],
-    status: 'recepcion', // recepcion | pendiente | en_proceso | historial
-    diagnosisText: '',
-    assignedMechanics: [],
-    timestamps: {
-      entry: '2026-07-14T09:15:00Z',
-      diagnosisCompleted: null,
-      approved: null,
-      repairStarted: null,
-      repairEnded: null,
-      delivery: null
-    },
-    financials: {
-      diagnosticCost: 50.00,
-      repairSubtotal: 0.00,
-      discountApplied: 0.00,
-      taxRate: 0.21,
-      totalDue: 60.50, // 50 * 1.21 (solo diagnóstico inicial)
-      hasAcceptedRepair: 'pending' // pending | approved | rejected | postponed
-    },
-    signature: {
-      signed: false,
-      signedAt: null,
-      ipAddress: null,
-      userAgent: null,
-      signatureImageBase64: null
-    }
-  },
-  {
-    id: 'ORD-2026-002',
-    client: {
-      fullName: 'Beatriz Ruiz Soler',
-      dniNif: '38291048Y',
-      phone: '+34622334455',
-      email: 'beatriz.ruiz@email.com',
-      address: 'Calle de Alcalá 140, Madrid'
-    },
-    vehicle: {
-      brand: 'Tesla',
-      model: 'Model 3 Standard Range',
-      licensePlate: '5678MTB',
-      vin: '5YJ3E1EA3LF739281',
-      mileage: 42100,
-      entryDate: '2026-07-13'
-    },
-    problemDescription: 'Ruido metálico en el eje trasero al pasar por baches.',
-    clientAnomaliesReport: 'Se nota más el ruido al acelerar con fuerza.',
-    initialPhotos: [
-      'https://images.unsplash.com/photo-1563720223185-11003d516935?auto=format&fit=crop&w=400&q=80'
-    ],
-    status: 'pendiente',
-    diagnosisText: 'Holgura en el brazo de suspensión trasero derecho. Requiere reemplazo del brazo y silentblocks.',
-    assignedMechanics: [],
-    timestamps: {
-      entry: '2026-07-13T10:30:00Z',
-      diagnosisCompleted: '2026-07-13T12:00:00Z',
-      approved: '2026-07-13T14:45:00Z',
-      repairStarted: null,
-      repairEnded: null,
-      delivery: null
-    },
-    financials: {
-      diagnosticCost: 50.00,
-      repairSubtotal: 320.00,
-      discountApplied: 50.00, // Descuento aplicado porque aceptó
-      taxRate: 0.21,
-      totalDue: 387.20, // (320 + 50 - 50) * 1.21
-      hasAcceptedRepair: 'approved'
-    },
-    signature: {
-      signed: true,
-      signedAt: '2026-07-13T14:45:00Z',
-      ipAddress: '192.168.1.45',
-      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X)',
-      signatureImageBase64: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50"><path d="M 10 25 Q 30 10 50 25 T 90 25" fill="none" stroke="cyan" stroke-width="2"/></svg>'
-    }
-  },
-  {
-    id: 'ORD-2026-003',
-    client: {
-      fullName: 'Marcos Alonso Pérez',
-      dniNif: '29384716A',
-      phone: '+34633445566',
-      email: 'marcos.alonso@email.com',
-      address: 'Plaza España 5, Barcelona'
-    },
-    vehicle: {
-      brand: 'Volkswagen',
-      model: 'Golf GTI MK7',
-      licensePlate: '9911LMT',
-      vin: 'WVWZZZAUZGW294810',
-      mileage: 123000,
-      entryDate: '2026-07-12'
-    },
-    problemDescription: 'Cambio de pastillas de freno delanteras y revisión de frenada.',
-    clientAnomaliesReport: 'Frena un poco blando y chilla ligeramente al frenar suave.',
-    initialPhotos: [
-      'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=400&q=80'
-    ],
-    status: 'en_proceso',
-    diagnosisText: 'Pastillas de freno al 10% de vida útil. Discos en buen estado, solo requiere reemplazo de pastillas brembo y purgado de líquido.',
-    assignedMechanics: ['MEC_001', 'MEC_002'], // Asignados Carlos y Ana
-    timestamps: {
-      entry: '2026-07-12T08:15:00Z',
-      diagnosisCompleted: '2026-07-12T10:00:00Z',
-      approved: '2026-07-12T11:30:00Z',
-      repairStarted: '2026-07-15T08:00:00Z',
-      repairEnded: null,
-      delivery: null
-    },
-    financials: {
-      diagnosticCost: 50.00,
-      repairSubtotal: 180.00,
-      discountApplied: 50.00,
-      taxRate: 0.21,
-      totalDue: 217.80, // (180 + 50 - 50) * 1.21
-      hasAcceptedRepair: 'approved'
-    },
-    signature: {
-      signed: true,
-      signedAt: '2026-07-12T11:30:00Z',
-      ipAddress: '192.168.1.100',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      signatureImageBase64: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50"><path d="M 5 15 C 20 40 30 2 80 45" fill="none" stroke="cyan" stroke-width="2"/></svg>'
-    }
-  }
-];
+// Órdenes de prueba iniciales para poblar el Kanban (vacías para tablero limpio)
+const INITIAL_ORDERS = [];
 
 const INITIAL_CLIENTS = [
   {
@@ -389,8 +240,9 @@ const INITIAL_CLIENTS = [
 export const WorkshopProvider = ({ children }) => {
   const [orders, setOrders] = useState(() => {
     const saved = localStorage.getItem('autoflow_orders');
+    const deleted = new Set(JSON.parse(localStorage.getItem('autoflow_deleted_order_ids') || '[]'));
     const rawOrders = saved ? JSON.parse(saved) : INITIAL_ORDERS;
-    return ensureOrdersHaveTokens(rawOrders);
+    return ensureOrdersHaveTokens(rawOrders.filter(o => o && !deleted.has(o.id)));
   });
 
   const [clients, setClients] = useState(() => {
@@ -530,9 +382,11 @@ export const WorkshopProvider = ({ children }) => {
       .then(r => r.json())
       .then(res => {
         if (res && res.success && Array.isArray(res.orders) && res.orders.length > 0) {
+          const deleted = new Set(JSON.parse(localStorage.getItem('autoflow_deleted_order_ids') || '[]'));
+          const validDbOrders = res.orders.filter(o => o && !deleted.has(o.id));
           setOrders(prev => {
             const merged = [...prev];
-            res.orders.forEach(dbOrder => {
+            validDbOrders.forEach(dbOrder => {
               const idx = merged.findIndex(o => o.id === dbOrder.id);
               if (idx >= 0) {
                 // Preservar valores de diagnóstico y presupuesto sin permitir que un 0 sobreescriba un importe real
@@ -989,6 +843,28 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
               text: aiReply,
               portalUrl: aiReply.includes('/portal/') ? portalUrl : null
             });
+
+            // Si la IA confirma la cita o recepción, crear/actualizar automáticamente la tarjeta en Recepción
+            const lowerReply = aiReply.toLowerCase();
+            const isConfirmed = 
+              lowerReply.includes('cita') || 
+              lowerReply.includes('agendad') || 
+              lowerReply.includes('recepci') || 
+              lowerReply.includes('registrad') || 
+              lowerReply.includes('te esperamos') ||
+              lowerReply.includes('quedamos') ||
+              lowerReply.includes('reservad');
+
+            if (isConfirmed) {
+              const activeVeh = selectedVehicle || targetOrder.vehicle;
+              const activeCli = matchedClient || targetOrder.client;
+              createOrUpdateOrderInRecepcion({
+                ...targetOrder,
+                client: activeCli,
+                vehicle: activeVeh,
+                problemDescription: targetOrder.problemDescription || text.trim() || 'Cita concertada con Asistente Virtual IA'
+              });
+            }
           } else if (result?.data?.message === 'Error in workflow' || result?.message === 'Error in workflow') {
             addToast('⚠️ Error en la ejecución de n8n (revisa el panel de Executions en n8n)', 'warning');
           }
@@ -1906,14 +1782,27 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
 
   // Vaciar todos los coches entregados del historial
   const clearDeliveredOrders = () => {
+    const deliveredIds = orders.filter(o => o.status === 'entregado').map(o => o.id);
     setOrders(prev => prev.filter(o => o.status !== 'entregado'));
+    try {
+      const saved = JSON.parse(localStorage.getItem('autoflow_deleted_order_ids') || '[]');
+      const next = Array.from(new Set([...saved, ...deliveredIds]));
+      localStorage.setItem('autoflow_deleted_order_ids', JSON.stringify(next));
+    } catch {}
     addToast('🧹 Historial de coches entregados vaciado', 'info');
   };
 
-  // Eliminar una orden individual por ID
+  // Eliminar una orden individual por ID de forma permanente
   const deleteOrder = (orderId) => {
     if (!orderId) return;
     setOrders(prev => prev.filter(o => o.id !== orderId));
+    try {
+      const saved = JSON.parse(localStorage.getItem('autoflow_deleted_order_ids') || '[]');
+      if (!saved.includes(orderId)) {
+        saved.push(orderId);
+        localStorage.setItem('autoflow_deleted_order_ids', JSON.stringify(saved));
+      }
+    } catch {}
     addToast(`🗑️ Registro ${orderId} eliminado`, 'info');
   };
 
