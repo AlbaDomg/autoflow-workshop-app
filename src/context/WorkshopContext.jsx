@@ -859,6 +859,45 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
               text: aiReply,
               portalUrl: aiReply.includes('/portal/') ? portalUrl : null
             });
+
+            // Detectar si la IA ha confirmado formalmente la generación de la tarjeta de recepción
+            const replyLower = aiReply.toLowerCase();
+            const isConfirmedCreation =
+              (replyLower.includes('tarjeta') &&
+                (replyLower.includes('generad') || replyLower.includes('cread') || replyLower.includes('registrad')) &&
+                (replyLower.includes('recepci') || replyLower.includes('éxito') || replyLower.includes('exito') || replyLower.includes('taller'))) &&
+              !replyLower.includes('vamos a proceder') &&
+              !replyLower.includes('voy a necesitar') &&
+              !replyLower.includes('antes de continuar');
+
+            if (isConfirmedCreation) {
+              const activeCli = matchedClient || targetOrder.client || { fullName: 'Cliente' };
+              const activeVeh = selectedVehicle || targetOrder.vehicle || {};
+
+              // Extraer motivo de la avería o revisión del texto o del historial
+              let detectedProblem = 'Revisión periódica y mantenimiento';
+              const problemMatch = aiReply.match(/para (?:la|el)\s+\*?([^*.\n]+)\*?\s+de/i);
+              if (problemMatch && problemMatch[1]) {
+                detectedProblem = problemMatch[1].trim();
+              } else if (targetOrder.problemDescription && targetOrder.problemDescription !== 'Avería comunicada por el cliente por WhatsApp') {
+                detectedProblem = targetOrder.problemDescription;
+              } else {
+                const lastProblemMsg = chatHistory
+                  .slice()
+                  .reverse()
+                  .find(m => m.sender === 'client' && m.text.length > 5 && !m.text.match(/^[0-9]+$/));
+                if (lastProblemMsg && lastProblemMsg.text) {
+                  detectedProblem = lastProblemMsg.text;
+                }
+              }
+
+              createOrUpdateOrderInRecepcion({
+                client: activeCli,
+                vehicle: activeVeh,
+                problemDescription: detectedProblem,
+                status: 'recepcion'
+              });
+            }
           } else if (result?.data?.message === 'Error in workflow' || result?.message === 'Error in workflow') {
             addToast('⚠️ Error en la ejecución de n8n (revisa el panel de Executions en n8n)', 'warning');
           }
