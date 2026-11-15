@@ -369,21 +369,41 @@ export const WorkshopProvider = ({ children }) => {
             }));
 
           setClients(prev => {
-            const merged = [...validDbClients];
-            prev.filter(c => c && !deletedDnis.has(c.dniNif?.toUpperCase())).forEach(localClient => {
-              const idx = merged.findIndex(c => c.dniNif?.toLowerCase() === localClient.dniNif?.toLowerCase());
-              if (idx >= 0) {
-                // La base de datos oficial del taller (clients-db.json) es la fuente de verdad
-                merged[idx] = {
-                  ...localClient,
-                  ...merged[idx],
-                  vehicles: merged[idx].vehicles || []
+            const currentClients = Array.isArray(prev) && prev.length > 0 ? prev : validDbClients;
+            const updated = currentClients
+              .filter(c => c && !deletedDnis.has(c.dniNif?.toUpperCase()))
+              .map(c => {
+                const dbMatch = validDbClients.find(dbc => dbc.dniNif?.toLowerCase() === c.dniNif?.toLowerCase());
+                const allVehicles = [...(c.vehicles || [])];
+                if (dbMatch && Array.isArray(dbMatch.vehicles)) {
+                  dbMatch.vehicles.forEach(dbv => {
+                    if (
+                      dbv &&
+                      dbv.licensePlate &&
+                      !deletedPlates.has(dbv.licensePlate.toUpperCase()) &&
+                      !allVehicles.some(v => v.licensePlate.toLowerCase() === dbv.licensePlate.toLowerCase())
+                    ) {
+                      allVehicles.push(dbv);
+                    }
+                  });
+                }
+                return {
+                  ...(dbMatch || {}),
+                  ...c,
+                  vehicles: allVehicles.filter(v => v && !deletedPlates.has(v.licensePlate?.toUpperCase()))
                 };
-              } else {
-                merged.push(localClient);
+              });
+
+            validDbClients.forEach(dbc => {
+              if (!deletedDnis.has(dbc.dniNif?.toUpperCase()) && !updated.some(c => c.dniNif?.toLowerCase() === dbc.dniNif?.toLowerCase())) {
+                updated.push({
+                  ...dbc,
+                  vehicles: (dbc.vehicles || []).filter(v => v && !deletedPlates.has(v.licensePlate?.toUpperCase()))
+                });
               }
             });
-            return migrateClientsList(merged);
+
+            return migrateClientsList(updated);
           });
         } else {
           setClients(prev => migrateClientsList(prev));
@@ -1721,6 +1741,14 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
 
   // Agregar o actualizar un cliente de forma manual desde el directorio
   const addClient = (clientData, vehicleData = null) => {
+    const cleanDni = (clientData?.dniNif || '').trim().toUpperCase();
+    if (cleanDni) {
+      try {
+        const saved = JSON.parse(localStorage.getItem('autoflow_deleted_client_dnis') || '[]');
+        const filtered = saved.filter(d => d !== cleanDni);
+        localStorage.setItem('autoflow_deleted_client_dnis', JSON.stringify(filtered));
+      } catch {}
+    }
     setClients(prev => {
       const clientExists = prev.find(c => c.dniNif.toLowerCase() === clientData.dniNif.toLowerCase());
       if (clientExists) {
@@ -1768,6 +1796,12 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
   // Vincular un nuevo vehículo a un cliente existente
   const addVehicleToClient = async (dniNif, vehicleData) => {
     if (!dniNif || !vehicleData || !vehicleData.licensePlate) return;
+    const cleanPlate = vehicleData.licensePlate.trim().toUpperCase();
+    try {
+      const saved = JSON.parse(localStorage.getItem('autoflow_deleted_vehicle_plates') || '[]');
+      const filtered = saved.filter(p => p !== cleanPlate);
+      localStorage.setItem('autoflow_deleted_vehicle_plates', JSON.stringify(filtered));
+    } catch {}
     
     setClients(prev => {
       const nextClients = prev.map(c => {
