@@ -113,6 +113,7 @@ body {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  flex-shrink: 0;
 }
 
 .nav-wa-btn {
@@ -126,9 +127,13 @@ body {
   cursor: pointer;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.4rem;
   transition: var(--transition-smooth);
   white-space: nowrap;
+  flex-shrink: 0;
+  height: 2.5rem;
+  box-sizing: border-box;
 }
 
 .nav-wa-btn:hover {
@@ -252,17 +257,31 @@ body {
   }
 }
 
+@media (max-width: 768px) {
+  .nav-wa-text {
+    display: none;
+  }
+  .nav-wa-btn {
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 1.15rem;
+    justify-content: center;
+  }
+  .header-quick-actions {
+    gap: 0.5rem;
+  }
+}
+
 @media (max-width: 480px) {
   .logo-text {
-    font-size: 1.2rem;
+    font-size: 1.15rem;
   }
   .logo-icon {
     width: 2.1rem;
     height: 2.1rem;
     font-size: 1.05rem;
-  }
-  .nav-wa-text {
-    display: none;
   }
 }
 
@@ -1134,6 +1153,10 @@ textarea.form-control {
 .bell-container {
   position: relative;
   z-index: 110;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .bell-button {
@@ -1149,6 +1172,8 @@ textarea.form-control {
   justify-content: center;
   position: relative;
   transition: var(--transition-smooth);
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .bell-button:hover {
@@ -1164,11 +1189,11 @@ textarea.form-control {
 
 .bell-badge {
   position: absolute;
-  top: -2px;
-  right: -2px;
+  top: -3px;
+  right: -3px;
   background: var(--color-danger);
   color: #fff;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 700;
   min-width: 18px;
   height: 18px;
@@ -1179,6 +1204,7 @@ textarea.form-control {
   padding: 0 4px;
   border: 2px solid var(--bg-main);
   box-shadow: 0 0 8px var(--color-danger);
+  pointer-events: none;
 }
 
 .bell-dropdown {

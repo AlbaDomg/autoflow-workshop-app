@@ -91,7 +91,7 @@ export default function Navigation() {
         </button>
 
         {/* Campana de Notificaciones */}
-        <div className="bell-container" style={{ position: 'relative', zIndex: 110 }}>
+        <div className="bell-container">
           <button 
             className={`bell-button ${unreadCount > 0 ? 'bell-unread' : ''}`}
             onClick={() => setShowDropdown(!showDropdown)}
