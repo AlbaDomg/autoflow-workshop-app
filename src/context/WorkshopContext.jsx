@@ -4,7 +4,8 @@ import {
   isAutomotiveIssue,
   parseClientAndVehicleFromConversation,
   extractDetectedProblem,
-  decideCardCreation
+  decideCardCreation,
+  detectAdminAlert
 } from '../utils/chatCardLogic';
 import { generateSignedOrderPdf } from '../utils/pdfGenerator';
 
@@ -992,7 +993,24 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
               (candidateVehicle.licensePlate || candidateVehicle.model)
             );
 
-            // 4. Decisión de crear/actualizar tarjeta (con red de seguridad si la IA afirma haberla creado)
+            // 4. Detectar avisos prioritarios para el Administrador (urgencias, grúa, cambio/cancelación de cita o llamada)
+            const alertClientName = matchedClient?.fullName || parsed.fullName || targetOrder.client?.fullName || '';
+            const alertClientPhone = matchedClient?.phone || parsed.phone || targetOrder.client?.phone || '';
+            const alertVehLabel = candidateVehicle?.brand
+              ? `${candidateVehicle.brand} ${candidateVehicle.model || ''}${candidateVehicle.licensePlate ? ` (${candidateVehicle.licensePlate})` : ''}`.trim()
+              : '';
+            const adminAlert = detectAdminAlert({
+              text,
+              aiReply,
+              clientName: alertClientName,
+              clientPhone: alertClientPhone,
+              vehicleLabel: alertVehLabel
+            });
+            if (adminAlert) {
+              addNotification(adminAlert.message, adminAlert.type);
+            }
+
+            // 5. Decisión de crear/actualizar tarjeta (con red de seguridad si la IA afirma haberla creado)
             const cardDecision = decideCardCreation({ aiReply, detectedProblem, candidateVehicle });
             const isConfirmedCreation = cardDecision.create;
             if (cardDecision.viaSafetyNet) {

@@ -1,7 +1,7 @@
 // Tests de escenarios de chat: ejecutar con `node tests/chat-scenarios.mjs`
 import {
   isAutomotiveIssue, parseClientAndVehicleFromConversation,
-  extractDetectedProblem, decideCardCreation, GENERIC_PROBLEM
+  extractDetectedProblem, decideCardCreation, detectAdminAlert, GENERIC_PROBLEM
 } from '../src/utils/chatCardLogic.js';
 
 let pass = 0, fail = 0;
@@ -98,9 +98,36 @@ for (const t of ['no frena bien', 'no arranca el coche', 'no me funciona el aire
   check(`avería: "${t}"`, isAutomotiveIssue(t));
 }
 console.log('\n[11] Textos que NO son avería');
-for (const t of ['genial gracias', 'ok', 'vale', 'no', 'si', 'pasado mañana a las 6 de la tarde', 'el miércoles a las 11', 'Seat Ibiza', 'muchas gracias']) {
+for (const t of ['genial gracias', 'ok', 'vale', 'no', 'si', 'pasado mañana a las 6 de la tarde', 'el miércoles a las 11', 'Seat Ibiza', 'muchas gracias', 'quiero cambiar la cita', 'necesito cancelar mi cita']) {
   check(`no avería: "${t}"`, !isAutomotiveIssue(t));
 }
+
+console.log('\n[12] Alertas en Campanita 🔔 para el Administrador');
+const aUrg = detectAdminAlert({
+  text: 'Es urgente, me ha dejado tirado el coche y va en grúa',
+  aiReply: 'Entendido, avisamos al taller.',
+  clientName: 'Alba Dominguez Garcia',
+  clientPhone: '+34620922500',
+  vehicleLabel: 'Seat Ibiza (1234KGB)'
+});
+check('detecta urgencia / grúa como danger', aUrg && aUrg.type === 'danger' && aUrg.category === 'urgency');
+
+const aCancel = detectAdminAlert({
+  text: 'Hola, necesito cambiar la cita de mañana a otro día',
+  aiReply: 'El taller se pondrá en contacto contigo.',
+  clientName: 'Alba Dominguez Garcia',
+  clientPhone: '+34620922500',
+  vehicleLabel: 'Seat Ibiza (1234KGB)'
+});
+check('detecta cambio/cancelación de cita como warning', aCancel && aCancel.type === 'warning' && aCancel.category === 'appointment_change');
+
+const aCall = detectAdminAlert({
+  text: '¿Puedo hablar con un mecánico por favor?',
+  aiReply: 'Claro, el taller se pondrá en contacto contigo.',
+  clientName: 'Alba Dominguez Garcia',
+  clientPhone: '+34620922500'
+});
+check('detecta solicitud de hablar con mecánico', aCall && aCall.type === 'warning' && aCall.category === 'human_contact');
 
 console.log(`\nResultado: ${pass} OK, ${fail} fallos`);
 process.exit(fail ? 1 : 0);

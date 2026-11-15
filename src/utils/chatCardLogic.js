@@ -8,6 +8,8 @@ export const isCourtesyText = (t) => {
   if (clean.length < 45 && /^(genial|gracias|muchas gracias|muchísimas gracias|perfecto|vale|ok|okey|okay|de nada|adios|adiós|hasta luego|hasta pronto|entendido|listo|de acuerdo|nos vemos|fenomenal|estupendo|estupenda|guay)(?![a-záéíóúñ])/i.test(clean)) return true;
   // Fechas y horarios de cita
   if (/^(pasado mañana|mañana|hoy|el (lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)|a las \d+|el \d{1,2}\b|\d{1,2}[/:]\d{1,2})/i.test(clean)) return true;
+  // Peticiones de cambio/cancelación de cita o llamada (no son averías mecánicas)
+  if (/(?:cambiar|cambio|cancelar|anular|mover|posponer|modificar)\s+(?:la\s+|mi\s+|de\s+)?(?:cita|hora|d[ií]a)|no\s+(?:voy\s+a\s+poder|puedo)\s+(?:ir|acudir|asistir)/i.test(clean)) return true;
   return false;
 };
 
@@ -255,7 +257,7 @@ export const decideCardCreation = ({ aiReply = '', detectedProblem = '', candida
     detectedProblem !== 'Revisión periódica y mantenimiento' &&
     detectedProblem !== 'Avería comunicada por el cliente por WhatsApp';
 
-  const isAskingQuestion = /(?:¿?con cu[aá]l de ellos|cu[eé]ntame el motivo|ind[ií]came el motivo|¿?qu[eé] d[ií]a|en qu[eé] puedo ayudarte|podr[ií]as proporcionarme)/i.test(aiReply);
+  const isAskingQuestion = /(?:¿?con cu[aá]l de ellos|cu[eé]ntame el motivo|ind[ií]came el motivo|¿?qu[eé] d[ií]a|en qu[eé] puedo ayudarte|podr[ií]as proporcionarme|el taller se pondr[aá] en contacto)/i.test(aiReply);
 
   // La IA AFIRMA que ya ha creado algo (tarjeta, ficha o visita registrada)
   const aiClaimsCreated =
@@ -274,4 +276,50 @@ export const decideCardCreation = ({ aiReply = '', detectedProblem = '', candida
   const safetyNet = !normal && aiClaimsCreated;
 
   return { create: normal || safetyNet, viaSafetyNet: safetyNet, hasChosenVehicle, hasRealProblem, aiClaimsCreated };
+};
+
+// Detecta si el mensaje del cliente o la respuesta de la IA requieren un aviso inmediato en la Campanita 🔔 del taller
+// (urgencias, grúa, cambio o cancelación de cita, o solicitud de contacto humano).
+export const detectAdminAlert = ({ text = '', aiReply = '', clientName = '', clientPhone = '', vehicleLabel = '' }) => {
+  const cleanText = String(text || '').trim();
+  if (!cleanText) return null;
+
+  const who = [
+    clientName && clientName !== 'Cliente' && clientName !== 'Cliente de WhatsApp' ? clientName : 'Cliente por WhatsApp',
+    clientPhone ? `(${clientPhone})` : ''
+  ].filter(Boolean).join(' ');
+  const veh = vehicleLabel ? ` — ${vehicleLabel}` : '';
+  const excerpt = cleanText.length > 55 ? `${cleanText.slice(0, 55)}...` : cleanText;
+
+  // 1. Urgencia / Grúa / Avería crítica en carretera
+  if (/\b(urgente|urgencia|emergencia|gr[uú]a|dejado\s+tirad[oa]|no\s+puedo\s+circular|echando\s+humo|accidente)\b/i.test(cleanText)) {
+    return {
+      type: 'danger',
+      category: 'urgency',
+      message: `🚨 URGENCIA EN TALLER: ${who}${veh} comunica un caso urgente («${excerpt}»). Contactar de inmediato.`
+    };
+  }
+
+  // 2. Cambio o cancelación de cita
+  if (/(?:cambiar|cambio|cancelar|anular|mover|posponer|modificar)\s+(?:la\s+|mi\s+|de\s+)?(?:cita|hora|d[ií]a)|no\s+(?:voy\s+a\s+poder|puedo)\s+(?:ir|acudir|asistir)/i.test(cleanText)) {
+    return {
+      type: 'warning',
+      category: 'appointment_change',
+      message: `📅 GESTIÓN DE CITA: ${who}${veh} solicita cambiar o cancelar su cita («${excerpt}»).`
+    };
+  }
+
+  // 3. Solicitud de hablar con un responsable / mecánico o promesa de contacto del taller
+  if (
+    /(?:hablar\s+con\s+(?:una\s+persona|un\s+mec[aá]nico|el\s+jefe|el\s+encargado|alguien)|que\s+me\s+llame|ll[aá]mame|llamadme)/i.test(cleanText) ||
+    /el\s+taller\s+se\s+pondr[aá]\s+en\s+contacto/i.test(aiReply)
+  ) {
+    return {
+      type: 'warning',
+      category: 'human_contact',
+      message: `📞 ATENCIÓN REQUERIDA: ${who}${veh} solicita contacto directo del taller («${excerpt}»).`
+    };
+  }
+
+  return null;
 };
