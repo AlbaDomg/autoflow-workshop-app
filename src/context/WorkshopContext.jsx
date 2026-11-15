@@ -376,12 +376,11 @@ export const WorkshopProvider = ({ children }) => {
             prev.filter(c => c && !deletedDnis.has(c.dniNif?.toUpperCase())).forEach(localClient => {
               const idx = merged.findIndex(c => c.dniNif?.toLowerCase() === localClient.dniNif?.toLowerCase());
               if (idx >= 0) {
-                const existingPlates = new Set((merged[idx].vehicles || []).map(v => v.licensePlate?.toUpperCase()));
-                const extraVehicles = (localClient.vehicles || []).filter(v => v && !existingPlates.has(v.licensePlate?.toUpperCase()) && !deletedPlates.has(v.licensePlate?.toUpperCase()));
+                // La base de datos oficial del taller (clients-db.json) es la fuente de verdad
                 merged[idx] = {
-                  ...merged[idx],
                   ...localClient,
-                  vehicles: [...(merged[idx].vehicles || []), ...extraVehicles]
+                  ...merged[idx],
+                  vehicles: merged[idx].vehicles || []
                 };
               } else {
                 merged.push(localClient);
