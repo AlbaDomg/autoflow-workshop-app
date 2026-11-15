@@ -7,8 +7,8 @@
     "address": "Calle Estepona,1",
     "vehicles": [
       {
-        "brand": "Seat",
-        "model": "Panda",
+        "brand": "Audi",
+        "model": "Q5",
         "licensePlate": "8465MGZ",
         "vin": "VSSZZZ1K2V1234567",
         "mileage": 55000,

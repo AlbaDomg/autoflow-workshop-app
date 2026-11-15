@@ -174,17 +174,26 @@ const ensureOrdersHaveTokens = (ordersList) => {
 const migrateClientsList = (clientsList) => {
   if (!Array.isArray(clientsList)) return [];
   // Purgar de forma permanente fichas residuales de prueba antiguas con DNI 48392019Z
-  // y purgar el vehículo fantasma Seat Ibiza (4865MGZ) que se creaba automáticamente
+  // y purgar vehículos fantasma de prueba (1234AGB, 4865MGZ / Ibiza)
   return clientsList
     .filter(c => c && c.dniNif !== '48392019Z')
     .map(c => {
       if (Array.isArray(c.vehicles)) {
         return {
           ...c,
-          vehicles: c.vehicles.filter(v => 
-            v.licensePlate !== '4865MGZ' && 
-            String(v.model || '').toLowerCase() !== 'ibiza'
-          )
+          vehicles: c.vehicles
+            .filter(v => 
+              v &&
+              v.licensePlate !== '4865MGZ' && 
+              v.licensePlate !== '1234AGB' && 
+              String(v.model || '').toLowerCase() !== 'ibiza'
+            )
+            .map(v => {
+              if (v.licensePlate === '8465MGZ') {
+                return { ...v, brand: 'Audi', model: 'Q5' };
+              }
+              return v;
+            })
         };
       }
       return c;
