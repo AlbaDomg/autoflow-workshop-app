@@ -1,4 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import {
+  isCourtesyText,
+  isAutomotiveIssue,
+  parseClientAndVehicleFromConversation,
+  extractDetectedProblem,
+  decideCardCreation
+} from '../utils/chatCardLogic';
 import { generateSignedOrderPdf } from '../utils/pdfGenerator';
 
 const WorkshopContext = createContext();
@@ -66,41 +73,6 @@ const buildPortalToken = (orderId, licensePlate = '') => {
   const cleanId = String(orderId || 'ord').toLowerCase().replace(/[^a-z0-9]/g, '');
   const cleanPlate = String(licensePlate || 'veh').toLowerCase().replace(/[^a-z0-9]/g, '');
   return `tok-${cleanId}-${cleanPlate}`;
-};
-
-// Detecta textos que NO son un motivo de avería: cortesías, confirmaciones y fechas/horas de cita
-export const isCourtesyText = (t) => {
-  const clean = String(t || '').trim().toLowerCase().replace(/^[¡!¿?.,\s]+/, '');
-  if (!clean) return true;
-  // Respuestas cortas de palabra COMPLETA ("no arranca" NO es cortesía)
-  if (/^(si|sí|no|bien|vale|ok|okey|okay|porfa|por favor|gracias|genial|perfecto|listo)[\s.,!¡?]*$/i.test(clean)) return true;
-  // Cortesías y despedidas en mensajes cortos (palabra completa)
-  if (clean.length < 45 && /^(genial|gracias|muchas gracias|muchísimas gracias|perfecto|vale|ok|okey|okay|de nada|adios|adiós|hasta luego|hasta pronto|entendido|listo|de acuerdo|nos vemos|fenomenal|estupendo|estupenda|guay)(?![a-záéíóúñ])/i.test(clean)) return true;
-  // Fechas y horarios de cita
-  if (/^(pasado mañana|mañana|hoy|el (lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)|a las \d+|el \d{1,2}\b|\d{1,2}[/:]\d{1,2})/i.test(clean)) return true;
-  return false;
-};
-
-// Validador estricto: ¿el texto describe realmente una avería / servicio de taller?
-export const isAutomotiveIssue = (t) => {
-  if (!t) return false;
-  const clean = String(t).trim().toLowerCase();
-  if (clean.length < 3 || isCourtesyText(clean)) return false;
-
-  const automotiveKeywords = [
-    'freno', 'pastilla', 'disco', 'ruido', 'chirr', 'chasquido', 'golpeteo',
-    'aceite', 'motor', 'itv', 'revis', 'aver', 'arranc', 'bater',
-    'embrague', 'neumat', 'rueda', 'pinch', 'luz', 'luces', 'faro',
-    'testigo', 'fallo', 'humo', 'temperatura', 'calienta', 'chapa',
-    'pintura', 'golpe', 'abollad', 'mantenimiento', 'diagn', 'filtro',
-    'correa', 'distribuc', 'suspens', 'amortigua', 'direcci', 'escape',
-    'cataliz', 'clima', 'aire', 'fuga', 'líquid', 'liquid', 'anticongel',
-    'vibr', 'potencia', 'aceler', 'cambio', 'marcha', 'problema', 'coche',
-    'cristal', 'luna', 'parabrisas', 'espejo', 'puerta',
-    'alternador', 'turbo', 'inyect', 'bujía', 'bujia', 'radiador', 'frena', 'falla',
-    'funciona', 'funcionando', 'pierde', 'gotea', 'huele', 'tiembla', 'suena'
-  ];
-  return automotiveKeywords.some(keyword => clean.includes(keyword));
 };
 
 // Extractor robusto y tolerante de respuestas del Agente IA de n8n (LangChain / Chat Trigger / Webhook)
@@ -737,144 +709,6 @@ export const WorkshopProvider = ({ children }) => {
     return null;
   };
 
-  // Extraer con alta precisión los datos del cliente y vehículo a partir de la conversación del chat
-  const parseClientAndVehicleFromConversation = (aiReply = '', chatHistory = [], text = '', activeDni = '') => {
-    const result = {
-      fullName: '',
-      dniNif: activeDni || '',
-      phone: '',
-      email: '',
-      address: '',
-      brand: '',
-      model: '',
-      licensePlate: '',
-      vin: '',
-      mileage: 0,
-      problemDescription: ''
-    };
-
-    const allMessages = [
-      ...(Array.isArray(chatHistory) ? chatHistory : []),
-      { sender: 'client', text: text || '' },
-      { sender: 'ai', text: aiReply || '' }
-    ];
-
-    const fullText = allMessages.map(m => m.text || '').join('\n');
-    const userMessages = allMessages.filter(m => m.sender === 'client');
-    const userText = userMessages.map(m => m.text || '').join('\n');
-    const aiText = allMessages.filter(m => m.sender === 'ai').map(m => m.text || '').join('\n');
-
-    // 1. DNI / NIF / NIE
-    const dniRegex = /\b([0-9XYZxyz][0-9]{7}[A-Za-z]|[0-9]{8}[A-Za-z])\b/;
-    const dniMatch = fullText.match(dniRegex);
-    if (dniMatch) {
-      result.dniNif = dniMatch[1].toUpperCase();
-    }
-
-    // 2. Teléfono (móvil español o con prefijo internacional)
-    const phoneRegex = /(?:(?:\+|00)34[\s.-]*)?([6789]\d{2}[\s.-]?\d{3}[\s.-]?\d{3})\b/;
-    const phoneMatch = fullText.match(phoneRegex);
-    if (phoneMatch) {
-      const raw = phoneMatch[0].replace(/[\s.-]/g, '');
-      result.phone = raw.startsWith('+34') ? raw : (raw.startsWith('0034') ? `+${raw.slice(2)}` : `+34${raw}`);
-    }
-
-    // 3. Email
-    const emailRegex = /\b([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/;
-    const emailMatch = fullText.match(emailRegex);
-    if (emailMatch) {
-      result.email = emailMatch[1].toLowerCase();
-    }
-
-    // 4. Matrícula (española moderna 1234ABC o clásica M1234AB)
-    const plateRegex = /\b([0-9]{4}\s*[- ]?[A-Z]{3})\b/i;
-    const oldPlateRegex = /\b([A-Z]{1,2}\s*[- ]?[0-9]{4}\s*[- ]?[A-Z]{1,2})\b/i;
-    const plateMatch = fullText.match(plateRegex) || fullText.match(oldPlateRegex);
-    if (plateMatch) {
-      result.licensePlate = plateMatch[1].replace(/[\s-]/g, '').toUpperCase();
-    }
-
-    // 5. Marca y Modelo de vehículo
-    const KNOWN_BRANDS = [
-      'Alfa Romeo', 'Aston Martin', 'Audi', 'BMW', 'Citroen', 'Citroën', 'Cupra',
-      'Dacia', 'DS', 'Ferrari', 'Fiat', 'Ford', 'Honda', 'Hyundai', 'Jaguar',
-      'Jeep', 'Kia', 'Land Rover', 'Lexus', 'Maserati', 'Mazda', 'Mercedes-Benz',
-      'Mercedes', 'MG', 'Mini', 'Mitsubishi', 'Nissan', 'Opel', 'Peugeot',
-      'Porsche', 'Renault', 'Seat', 'Škoda', 'Skoda', 'Smart', 'Subaru',
-      'Suzuki', 'Tesla', 'Toyota', 'Volkswagen', 'Volvo'
-    ];
-
-    for (const b of KNOWN_BRANDS) {
-      const bRegex = new RegExp(`\\b${b}\\b`, 'i');
-      if (bRegex.test(fullText)) {
-        result.brand = b.replace('Mercedes-Benz', 'Mercedes').replace('Škoda', 'Skoda');
-        const modelRegex = new RegExp(`\\b${b}\\s+([A-Za-z0-9áéíóúÁÉÍÓÚ+.-]+(?:\\s+[A-Za-z0-9áéíóúÁÉÍÓÚ+.-]+)?)`, 'i');
-        const mMatch = fullText.match(modelRegex);
-        if (mMatch && mMatch[1]) {
-          const candidate = mMatch[1].trim();
-          if (!/^(con|de|del|matricula|matrícula|para|por|en|y|es|km|kilometros)$/i.test(candidate)) {
-            result.model = candidate;
-          }
-        }
-        break;
-      }
-    }
-
-    // Patrón específico en respuesta de la IA: "para la revisión de tu [Marca] [Modelo] - matrícula [Matrícula]"
-    const aiCarPattern = /(?:de tu|de su|del)\s+\*?([A-Za-zÁÉÍÓÚáéíóú]+(?:\s+[A-Za-z0-9ÁÉÍÓÚáéíóú.-]+)?)\*?\s*-\s*matr[íi]cula/i;
-    const aiCarMatch = aiText.match(aiCarPattern);
-    if (aiCarMatch && aiCarMatch[1]) {
-      const parts = aiCarMatch[1].trim().split(/\s+/);
-      if (!result.brand && parts.length > 0) result.brand = parts[0];
-      if (!result.model && parts.length > 1) result.model = parts.slice(1).join(' ');
-    }
-
-    // 6. Kilometraje
-    const kmRegex = /\b([0-9]{1,3}(?:\.[0-9]{3})+|[0-9]{2,6})\s*(?:km|kms|kilometros|kilómetros)\b/i;
-    const kmMatch = fullText.match(kmRegex);
-    if (kmMatch) {
-      result.mileage = parseInt(kmMatch[1].replace(/\./g, ''), 10) || 0;
-    } else {
-      for (const m of userMessages) {
-        const pureNum = (m.text || '').trim().match(/^([0-9]{4,6})$/);
-        if (pureNum) {
-          result.mileage = parseInt(pureNum[1], 10);
-          break;
-        }
-      }
-    }
-
-    // 7. Nombre completo del cliente
-    const namePatterns = [
-      /(?:me llamo|mi nombre es|nombre(?:\s*es)?[:\s]+|soy)\s+([A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}(?:\s+[A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}){1,3})/i,
-      /(?:perfecto|hola|estimado|estimada|gracias),?\s+([A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}(?:\s+[A-Za-zÁÉÍÓÚáéíóúñÑ]{2,})?)[.!,]/i
-    ];
-    for (const pat of namePatterns) {
-      const nMatch = fullText.match(pat);
-      if (nMatch && nMatch[1]) {
-        const cand = nMatch[1].trim();
-        if (!/^(cliente|taller|asistente|buenos|buenas|muchas|gracias|vamos|proceder)$/i.test(cand)) {
-          result.fullName = cand;
-          break;
-        }
-      }
-    }
-
-    // 8. Dirección
-    const addrMatch = userText.match(/(?:vivo en|direccion|dirección|calle|avda|avenida)[:\s]+([^,\n]+(?:,\s*[^,\n]+)?)/i);
-    if (addrMatch && addrMatch[1]) {
-      result.address = addrMatch[1].trim();
-    }
-
-    // 9. Motivo o problema (validado estrictamente como avería automotriz)
-    const problemMatch = aiText.match(/para (?:la|el)\s+\*?([^*.\n]+)\*?\s+de/i);
-    if (problemMatch && problemMatch[1] && isAutomotiveIssue(problemMatch[1])) {
-      result.problemDescription = problemMatch[1].trim();
-    }
-
-    return result;
-  };
-
   // Enviar mensaje desde el Simulador de WhatsApp y conectarlo con n8n / Agente IA
   const sendWhatsAppChatMessage = async (orderId, text, senderRole = 'client') => {
     let targetOrder = (orderId === DEFAULT_CHAT_ORDER.id)
@@ -1102,103 +936,19 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
             const replyLower = aiReply.toLowerCase();
             const parsed = parseClientAndVehicleFromConversation(aiReply, chatHistory, text, activeDni);
 
-            // 1. Extraer motivo de la avería o revisión con máxima cobertura automotriz
-            let detectedProblem = '';
-
-            // A) Buscar diagnóstico específico en la confirmación de la IA (ej: "diagnóstico de frenos", "fallo de freno")
-            const diagFrenosMatch = aiReply.match(/(?:para\s+el\s+|para\s+la\s+|el\s+)(diagn[oó]stico\s+de\s+[^*.\n,]+)/i);
-            if (diagFrenosMatch && diagFrenosMatch[1] && isAutomotiveIssue(diagFrenosMatch[1])) {
-              detectedProblem = diagFrenosMatch[1].trim();
-            }
-            if (!detectedProblem) {
-              const falloMatch = aiReply.match(/(?:por\s+el\s+|por\s+|para\s+el\s+)(fallo\s+de\s+[^*.\n,]+)/i);
-              if (falloMatch && falloMatch[1] && isAutomotiveIssue(falloMatch[1])) {
-                detectedProblem = falloMatch[1].trim();
-              }
-            }
-            if (!detectedProblem) {
-              const revisMatch = aiReply.match(/(?:para\s+la\s+|para\s+el\s+)(revisi[oó]n\s+[^*.\n,]+)/i);
-              if (revisMatch && revisMatch[1] && isAutomotiveIssue(revisMatch[1])) {
-                detectedProblem = revisMatch[1].trim();
-              }
-            }
-            if (!detectedProblem) {
-              const motivoMatch = aiReply.match(/(?:motivo\s+es\s+(?:que\s+)?(?:el\s+|la\s+)?|motivo:\s*\*?)\*?([^*.\n]+)\*?/i);
-              if (motivoMatch && motivoMatch[1] && isAutomotiveIssue(motivoMatch[1])) {
-                detectedProblem = motivoMatch[1].trim();
-              }
-            }
-            if (!detectedProblem) {
-              const diagMatch = aiReply.match(/para diagnosticar (?:el problema con )?(?:el |la )?\*?([^*.\n]+)\*? del?/i);
-              if (diagMatch && diagMatch[1] && isAutomotiveIssue(diagMatch[1])) {
-                detectedProblem = diagMatch[1].trim();
-              }
-            }
-            if (!detectedProblem) {
-              const problemMatch = aiReply.match(/para (?:la|el)\s+\*?([^*.\n]+)\*?\s+de/i);
-              if (problemMatch && problemMatch[1] && isAutomotiveIssue(problemMatch[1])) {
-                detectedProblem = problemMatch[1].trim();
-              }
-            }
-
-            if (!detectedProblem) {
-              const probAiMatch = aiReply.match(/(?:debido\s+al\s+|debido\s+a\s+|por\s+el\s+|por\s+la\s+)(problema\s+(?:con|de|en)\s+[^*.\n,!]+)/i);
-              if (probAiMatch && probAiMatch[1] && isAutomotiveIssue(probAiMatch[1])) {
-                detectedProblem = probAiMatch[1].trim();
-              }
-            }
-
-            // B) Si la IA no cita la avería en este mensaje (ej: cuando responde a "genial gracias"), buscar en mensajes anteriores de la IA diagnósticos formulados
-            if (!detectedProblem || !isAutomotiveIssue(detectedProblem)) {
-              for (const m of chatHistory.slice().reverse()) {
-                if (m.sender === 'ai' && m.text) {
-                  const mDiag = m.text.match(/(?:para\s+el\s+|para\s+la\s+|el\s+)(diagn[oó]stico\s+de\s+[^*.\n,]+)/i) ||
-                                m.text.match(/(?:por\s+el\s+|por\s+|para\s+el\s+)(fallo\s+de\s+[^*.\n,]+)/i) ||
-                                m.text.match(/(?:para\s+la\s+|para\s+el\s+)(revisi[oó]n\s+[^*.\n,]+)/i);
-                  if (mDiag && mDiag[1] && isAutomotiveIssue(mDiag[1])) {
-                    detectedProblem = mDiag[1].trim();
-                    break;
-                  }
-                }
-              }
-            }
-
-            // C) Si aún no hay diagnóstico, buscar en el historial el último mensaje del cliente que fuera avería real
-            if (!detectedProblem || !isAutomotiveIssue(detectedProblem)) {
-              const lastProblemMsg = chatHistory
-                .slice()
-                .reverse()
-                .find(m => m.sender === 'client' && isAutomotiveIssue(m.text));
-              if (lastProblemMsg && lastProblemMsg.text) {
-                detectedProblem = lastProblemMsg.text.trim();
-              }
-            }
-
-            // D) Buscar si en orders ya existe una orden activa en recepción para este vehículo o cliente con avería real
-            if (!detectedProblem || !isAutomotiveIssue(detectedProblem)) {
-              const plateToMatch = activeVehicle?.licensePlate || selectedVehicle?.licensePlate;
-              const dniToMatch = matchedClient?.dniNif || activeDni;
-              const existingCard = orders.find(o =>
-                o.status === 'recepcion' && (
-                  (plateToMatch && o.vehicle?.licensePlate && o.vehicle.licensePlate.toLowerCase() === plateToMatch.toLowerCase()) ||
-                  (dniToMatch && o.client?.dniNif && o.client.dniNif.toLowerCase() === dniToMatch.toLowerCase())
-                )
-              );
-              if (existingCard && isAutomotiveIssue(existingCard.problemDescription)) {
-                detectedProblem = existingCard.problemDescription;
-              }
-            }
-
-            // E) Si targetOrder tenía una avería mecánica previa, PRESERVARLA
-            if (!isAutomotiveIssue(detectedProblem) && targetOrder.problemDescription && isAutomotiveIssue(targetOrder.problemDescription)) {
-              detectedProblem = targetOrder.problemDescription;
-            }
-
-            if (!detectedProblem || !isAutomotiveIssue(detectedProblem)) {
-              detectedProblem = (parsed.problemDescription && isAutomotiveIssue(parsed.problemDescription))
-                ? parsed.problemDescription
-                : 'Diagnóstico y revisión en taller';
-            }
+            // 1. Motivo real de la avería (nunca una cortesía ni una fecha). Preserva el de la tarjeta existente.
+            const plateForCard = activeVehicle?.licensePlate || selectedVehicle?.licensePlate;
+            const dniForCard = matchedClient?.dniNif || activeDni;
+            const existingCardForProblem = orders.find(o =>
+              o.status === 'recepcion' && (
+                (plateForCard && o.vehicle?.licensePlate && o.vehicle.licensePlate.toLowerCase() === plateForCard.toLowerCase()) ||
+                (dniForCard && o.client?.dniNif && o.client.dniNif.toLowerCase() === dniForCard.toLowerCase())
+              )
+            );
+            const detectedProblem = extractDetectedProblem(
+              aiReply, chatHistory, parsed,
+              [existingCardForProblem?.problemDescription, targetOrder.problemDescription]
+            );
 
             // 2. Extraer fecha y hora de la cita agendada si se menciona
             let appointmentNotice = '';
@@ -1242,28 +992,12 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
               (candidateVehicle.licensePlate || candidateVehicle.model)
             );
 
-            // 4. Determinar si se ha comunicado un motivo o avería real para esta visita
-            const hasRealProblem = Boolean(detectedProblem) &&
-              detectedProblem !== 'Revisión periódica y mantenimiento' &&
-              detectedProblem !== 'Revisión y diagnóstico en taller' &&
-              detectedProblem !== 'Avería comunicada por el cliente por WhatsApp';
-
-            // 5. Determinar si la IA solo está saludando o haciendo preguntas exploratorias (ej: "¿Con cuál de ellos vienes? Cuéntame el motivo")
-            const isAskingQuestion = /(?:¿?con cu[aá]l de ellos|cu[eé]ntame el motivo|ind[ií]came el motivo|¿?qu[eé] d[ií]a|en qu[eé] puedo ayudarte|podr[ií]as proporcionarme)/i.test(aiReply);
-
-            // 6. Determinar si la IA ha confirmado formalmente la visita o cita
-            const hasAiConfirmation =
-              /(?:he\s+registrado|queda\s+registrada|hemos\s+registrado)\s+(?:tu|su)?\s*visita/i.test(aiReply) ||
-              /(?:cita\s+(?:ha sido\s+)?agendada|cita\s+confirmada|cita\s+programada)/i.test(aiReply) ||
-              /(?:tarjeta\s+de\s+recepci[oó]n|generado\s+la\s+tarjeta|creada\s+la\s+tarjeta|tarjeta\s+generada)/i.test(aiReply) ||
-              /(?:te\s+esperamos|le\s+esperamos)\s+en\s+el\s+taller/i.test(aiReply) ||
-              (replyLower.includes('diagnóstico') && (replyLower.includes('50') || replyLower.includes('coste')) && hasRealProblem);
-
-            // REGLA DE ORO: La tarjeta en Recepción SOLO se crea si el cliente ya eligió vehículo y la IA confirmó o indicó diagnóstico
-            const isConfirmedCreation = hasChosenVehicle && (
-              hasAiConfirmation ||
-              (hasRealProblem && !isAskingQuestion)
-            );
+            // 4. Decisión de crear/actualizar tarjeta (con red de seguridad si la IA afirma haberla creado)
+            const cardDecision = decideCardCreation({ aiReply, detectedProblem, candidateVehicle });
+            const isConfirmedCreation = cardDecision.create;
+            if (cardDecision.viaSafetyNet) {
+              addToast('🛟 La IA confirmó la tarjeta pero faltaban datos del vehículo: se ha creado igualmente. Revísala en Recepción.', 'warning');
+            }
 
             if (isConfirmedCreation) {
               const activeCli = (matchedClient && matchedClient.dniNif) ? matchedClient : {
