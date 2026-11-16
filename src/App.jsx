@@ -55,7 +55,13 @@ function MainApp() {
   if (portalToken) {
     return (
       <div className="app-container" style={{ position: 'relative', minHeight: '100vh' }}>
-        <ClientPortalSimulator token={portalToken} />
+        <ClientPortalSimulator
+          token={portalToken}
+          onBackToApp={() => {
+            window.history.pushState({}, '', '/');
+            setPortalToken(null);
+          }}
+        />
 
         <div className="toast-container">
           {toasts.map(toast => (

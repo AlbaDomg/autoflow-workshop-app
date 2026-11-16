@@ -125,8 +125,17 @@ function SignatureCanvas({ label, onSave, onClearActive }) {
   );
 }
 
-export default function ClientPortalSimulator({ token }) {
+export default function ClientPortalSimulator({ token, onBackToApp }) {
   const { orders, processClientAction, downloadOrderPdf } = useWorkshop();
+
+  const handleReturnToApp = () => {
+    if (typeof onBackToApp === 'function') {
+      onBackToApp();
+      return;
+    }
+    window.history.pushState({}, '', '/');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  };
 
   const [remoteOrder, setRemoteOrder] = useState(null);
 
@@ -314,8 +323,29 @@ export default function ClientPortalSimulator({ token }) {
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '92vh', padding: '1rem' }}>
       <div className="phone-wrapper" style={{ height: 'auto', minHeight: '680px', maxHeight: '90vh', width: '400px', maxWidth: '100%' }}>
         <div className="phone-screen" style={{ overflowY: 'auto' }}>
-          <div className="phone-header">
-            📲 Portal de Aprobación — Talleres Naranjo
+          <div className="phone-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+            <button
+              type="button"
+              onClick={handleReturnToApp}
+              style={{
+                background: 'rgba(255, 255, 255, 0.08)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                color: 'var(--text-primary)',
+                borderRadius: '6px',
+                padding: '0.25rem 0.6rem',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.25rem',
+                flexShrink: 0
+              }}
+              title="Volver al Panel / Chat"
+            >
+              ← Volver
+            </button>
+            <span style={{ flex: 1, textAlign: 'right', fontSize: '0.82rem' }}>Portal de Aprobación — Talleres Naranjo</span>
           </div>
 
           {!activeOrder ? (
@@ -323,6 +353,14 @@ export default function ClientPortalSimulator({ token }) {
               <div style={{ fontSize: '2rem' }}>🔒</div>
               <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>Enlace de orden no encontrado</div>
               <div>El token <code>{token}</code> no corresponde a ninguna orden activa en este navegador.</div>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ marginTop: '0.5rem', padding: '0.6rem 1.2rem' }}
+                onClick={handleReturnToApp}
+              >
+                ← Volver a la Aplicación
+              </button>
             </div>
           ) : alreadyProcessed ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', fontSize: '0.85rem', padding: '0.5rem 0' }}>
@@ -363,6 +401,15 @@ export default function ClientPortalSimulator({ token }) {
                 onClick={() => downloadOrderPdf(activeOrder)}
               >
                 Descargar PDF Oficial Firmado
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ width: '100%', padding: '0.7rem', borderColor: 'rgba(0, 242, 254, 0.35)', color: 'var(--color-primary)' }}
+                onClick={handleReturnToApp}
+              >
+                ← Volver a la Aplicación
               </button>
             </div>
           ) : (
