@@ -152,6 +152,81 @@ const extractAiReply = (result) => {
   return null;
 };
 
+const STATUS_RANK = {
+  recepcion: 1,
+  pendiente: 2,
+  en_proceso: 3,
+  reparado: 4,
+  a_entregar: 5,
+  entregado: 6
+};
+
+const mergeTwoOrders = (orderA, orderB) => {
+  if (!orderA) return orderB;
+  if (!orderB) return orderA;
+
+  const timeA = Number(orderA.updatedAt) || 0;
+  const timeB = Number(orderB.updatedAt) || 0;
+  const rankA = STATUS_RANK[orderA.status] || 0;
+  const rankB = STATUS_RANK[orderB.status] || 0;
+
+  let primary = orderB;
+  let secondary = orderA;
+
+  if (timeA > timeB) {
+    primary = orderA;
+    secondary = orderB;
+  } else if (timeB > timeA) {
+    primary = orderB;
+    secondary = orderA;
+  } else if (rankA > rankB) {
+    primary = orderA;
+    secondary = orderB;
+  } else if (rankB > rankA) {
+    primary = orderB;
+    secondary = orderA;
+  } else {
+    const scoreA = (orderA.diagnosisText ? 2 : 0) + ((orderA.assignedMechanics || []).length) + (orderA.signature?.signed ? 4 : 0);
+    const scoreB = (orderB.diagnosisText ? 2 : 0) + ((orderB.assignedMechanics || []).length) + (orderB.signature?.signed ? 4 : 0);
+    if (scoreA >= scoreB) {
+      primary = orderA;
+      secondary = orderB;
+    }
+  }
+
+  const subPrimary = parseFloat(primary.financials?.repairSubtotal) || 0;
+  const subSecondary = parseFloat(secondary.financials?.repairSubtotal) || 0;
+  const finalSubtotal = subPrimary > 0 ? subPrimary : Math.max(subPrimary, subSecondary);
+
+  const primarySigned = Boolean(primary.signature?.signed);
+  const secondarySigned = Boolean(secondary.signature?.signed);
+  const finalSignature = primarySigned ? primary.signature : (secondarySigned ? secondary.signature : (primary.signature || secondary.signature));
+
+  const finalMechanics = (Number(primary.updatedAt) || 0) > (Number(secondary.updatedAt) || 0)
+    ? (Array.isArray(primary.assignedMechanics) ? primary.assignedMechanics : [])
+    : ((primary.assignedMechanics || []).length >= (secondary.assignedMechanics || []).length
+        ? (primary.assignedMechanics || [])
+        : (secondary.assignedMechanics || []));
+
+  return {
+    ...secondary,
+    ...primary,
+    updatedAt: Math.max(timeA, timeB),
+    diagnosisText: primary.diagnosisText || secondary.diagnosisText || '',
+    assignedMechanics: finalMechanics,
+    client: { ...(secondary.client || {}), ...(primary.client || {}) },
+    vehicle: { ...(secondary.vehicle || {}), ...(primary.vehicle || {}) },
+    timestamps: { ...(secondary.timestamps || {}), ...(primary.timestamps || {}) },
+    financials: {
+      ...(secondary.financials || {}),
+      ...(primary.financials || {}),
+      repairSubtotal: finalSubtotal
+    },
+    signature: finalSignature,
+    signedDocument: primary.signedDocument || secondary.signedDocument || null
+  };
+};
+
 const ensureOrdersHaveTokens = (ordersList) => {
   if (!Array.isArray(ordersList)) return [];
   const normalized = ordersList
@@ -198,7 +273,7 @@ const ensureOrdersHaveTokens = (ordersList) => {
     });
 
   // Deduplicar automáticamente tarjetas en 'recepcion' que compartan la misma matrícula
-  // (p. ej. si n8n y el navegador crearon dos IDs distintos al mismo tiempo), conservando siempre el motivo técnico más específico
+  // (p. ej. si n8n y el navegador crearon dos IDs distintos al mismo tiempo), conservando siempre el motivo técnico y diagnóstico más completo
   const recepcionByPlate = new Map();
   const deduplicated = [];
   for (const ord of normalized) {
@@ -209,11 +284,19 @@ const ensureOrdersHaveTokens = (ordersList) => {
         deduplicated.push(ord);
       } else {
         const prevOrd = recepcionByPlate.get(plateKey);
+        const prevIdx = deduplicated.indexOf(prevOrd);
         const prevIsGeneric = !isAutomotiveIssue(prevOrd.problemDescription) || prevOrd.problemDescription === 'Diagnóstico y revisión en taller';
         const currIsReal = isAutomotiveIssue(ord.problemDescription) && ord.problemDescription !== 'Diagnóstico y revisión en taller';
+        const mergedDup = mergeTwoOrders(prevOrd, ord);
+        mergedDup.id = prevOrd.id;
+        mergedDup.portalToken = prevOrd.portalToken;
         if (prevIsGeneric && currIsReal) {
-          prevOrd.problemDescription = ord.problemDescription;
+          mergedDup.problemDescription = ord.problemDescription;
+        } else if (!prevIsGeneric) {
+          mergedDup.problemDescription = prevOrd.problemDescription;
         }
+        recepcionByPlate.set(plateKey, mergedDup);
+        if (prevIdx >= 0) deduplicated[prevIdx] = mergedDup;
       }
     } else {
       deduplicated.push(ord);
@@ -441,13 +524,22 @@ export const WorkshopProvider = ({ children }) => {
   const clientsInitialSeedDoneRef = useRef(false);
   const skipNextOrdersPushRef = useRef(false);
   const skipNextClientsPushRef = useRef(false);
+  const ordersMutationSeqRef = useRef(0);
+  const pendingOrderPushesRef = useRef(0);
+  const clientsMutationSeqRef = useRef(0);
+  const pendingClientPushesRef = useRef(0);
 
   useEffect(() => {
     // Sincronizar clientes en tiempo real con el backend (Neon PostgreSQL / API)
     const syncClientsWithBackend = () => {
+      if (pendingClientPushesRef.current > 0) return;
+      const seqAtStart = clientsMutationSeqRef.current;
       fetch('/api/clients')
         .then(r => r.json())
         .then(res => {
+          if (clientsMutationSeqRef.current !== seqAtStart || pendingClientPushesRef.current > 0) {
+            return;
+          }
           if (res && res.success && Array.isArray(res.clients)) {
             const deletedDnis = new Set(JSON.parse(localStorage.getItem('autoflow_deleted_client_dnis') || '[]'));
             const deletedPlates = new Set(JSON.parse(localStorage.getItem('autoflow_deleted_vehicle_plates') || '[]'));
@@ -557,37 +649,35 @@ export const WorkshopProvider = ({ children }) => {
 
     // Sincronizar órdenes en tiempo real con el backend (Neon PostgreSQL / API)
     const syncOrdersWithBackend = () => {
+      if (pendingOrderPushesRef.current > 0) return;
+      const seqAtStart = ordersMutationSeqRef.current;
       fetch('/api/orders')
         .then(r => r.json())
         .then(res => {
+          // Si el usuario acaba de interactuar con una tarjeta mientras el GET estaba en vuelo,
+          // descartamos esta respuesta antigua para que ningún botón rebote ni haya que pulsar dos veces
+          if (ordersMutationSeqRef.current !== seqAtStart || pendingOrderPushesRef.current > 0) {
+            return;
+          }
           if (res && res.success && Array.isArray(res.orders)) {
             const deleted = new Set(JSON.parse(localStorage.getItem('autoflow_deleted_order_ids') || '[]'));
             const validDbOrders = res.orders.filter(o => o && !deleted.has(o.id));
 
             if (res.fromCloudDb) {
               setOrders(prev => {
-                // Conservar órdenes locales no borradas y fusionar estados más avanzados desde Neon DB
+                // Conservar órdenes locales recién creadas y fusionar estados ganando siempre el más reciente (updatedAt / fase avanzada)
                 const merged = [...validDbOrders];
                 let localHasUnpushed = false;
+                const now = Date.now();
                 prev.forEach(lo => {
                   if (lo && !deleted.has(lo.id)) {
                     const idx = merged.findIndex(mo => mo.id === lo.id);
-                    if (idx === -1 && res.orders.length === 0) {
-                      merged.push(lo);
+                    const loAge = now - (Number(lo.updatedAt) || new Date(lo.timestamps?.entry || 0).getTime() || 0);
+                    if (idx === -1 && (res.orders.length === 0 || loAge < 25000)) {
+                      merged.unshift(lo);
                       localHasUnpushed = true;
                     } else if (idx >= 0) {
-                      const localSubtotal = parseFloat(lo.financials?.repairSubtotal) || 0;
-                      const dbSubtotal = parseFloat(merged[idx].financials?.repairSubtotal) || 0;
-                      const finalSubtotal = Math.max(localSubtotal, dbSubtotal);
-                      merged[idx] = {
-                        ...lo,
-                        ...merged[idx],
-                        financials: {
-                          ...lo.financials,
-                          ...merged[idx].financials,
-                          repairSubtotal: finalSubtotal
-                        }
-                      };
+                      merged[idx] = mergeTwoOrders(lo, merged[idx]);
                     }
                   }
                 });
@@ -605,22 +695,7 @@ export const WorkshopProvider = ({ children }) => {
                 validDbOrders.forEach(dbOrder => {
                   const idx = merged.findIndex(o => o.id === dbOrder.id);
                   if (idx >= 0) {
-                    const localSubtotal = parseFloat(merged[idx].financials?.repairSubtotal) || 0;
-                    const dbSubtotal = parseFloat(dbOrder.financials?.repairSubtotal) || 0;
-                    const finalSubtotal = Math.max(localSubtotal, dbSubtotal);
-
-                    merged[idx] = {
-                      ...dbOrder,
-                      ...merged[idx],
-                      financials: {
-                        ...dbOrder.financials,
-                        ...merged[idx].financials,
-                        repairSubtotal: finalSubtotal,
-                        totalDue: finalSubtotal > 0 && (merged[idx].financials?.hasAcceptedRepair === 'approved' || dbOrder.financials?.hasAcceptedRepair === 'approved')
-                          ? parseFloat((finalSubtotal * (1 + (merged[idx].financials?.taxRate || 0.21))).toFixed(2))
-                          : (merged[idx].financials?.totalDue || dbOrder.financials?.totalDue)
-                      }
-                    };
+                    merged[idx] = mergeTwoOrders(merged[idx], dbOrder);
                   } else {
                     merged.unshift(dbOrder);
                   }
@@ -654,11 +729,17 @@ export const WorkshopProvider = ({ children }) => {
       skipNextOrdersPushRef.current = false;
       return;
     }
+    const deletedOrderIds = JSON.parse(localStorage.getItem('autoflow_deleted_order_ids') || '[]');
+    pendingOrderPushesRef.current += 1;
     fetch('/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ syncAll: true, orders })
-    }).catch(() => {});
+      body: JSON.stringify({ syncAll: true, orders, deletedOrderIds })
+    })
+      .catch(() => {})
+      .finally(() => {
+        pendingOrderPushesRef.current = Math.max(0, pendingOrderPushesRef.current - 1);
+      });
   }, [orders]);
 
   useEffect(() => {
@@ -670,11 +751,16 @@ export const WorkshopProvider = ({ children }) => {
       skipNextClientsPushRef.current = false;
       return;
     }
+    pendingClientPushesRef.current += 1;
     fetch('/api/clients', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ syncAll: true, clients })
-    }).catch(() => {});
+    })
+      .catch(() => {})
+      .finally(() => {
+        pendingClientPushesRef.current = Math.max(0, pendingClientPushesRef.current - 1);
+      });
   }, [clients]);
 
   useEffect(() => {
@@ -706,12 +792,14 @@ export const WorkshopProvider = ({ children }) => {
     const handleStorageSync = (e) => {
       if (e.key === 'autoflow_orders' && e.newValue) {
         try {
+          skipNextOrdersPushRef.current = true;
           setOrders(ensureOrdersHaveTokens(JSON.parse(e.newValue)));
         } catch {
           // ignore parse error
         }
       } else if (e.key === 'autoflow_clients' && e.newValue) {
         try {
+          skipNextClientsPushRef.current = true;
           setClients(JSON.parse(e.newValue));
         } catch {
           // ignore parse error
@@ -884,10 +972,12 @@ export const WorkshopProvider = ({ children }) => {
   };
 
   // Enviar mensaje desde el Simulador de WhatsApp y conectarlo con n8n / Agente IA
-  const sendWhatsAppChatMessage = async (orderId, text, senderRole = 'client') => {
-    let targetOrder = (orderId === DEFAULT_CHAT_ORDER.id)
+  const sendWhatsAppChatMessage = async (orderOrId, text, senderRole = 'client') => {
+    const passedOrderObj = (typeof orderOrId === 'object' && orderOrId !== null) ? orderOrId : null;
+    const orderId = passedOrderObj ? (passedOrderObj.id || DEFAULT_CHAT_ORDER.id) : orderOrId;
+    let targetOrder = passedOrderObj || ((orderId === DEFAULT_CHAT_ORDER.id)
       ? DEFAULT_CHAT_ORDER
-      : (orders.find(o => o.id === orderId) || (orders.length > 0 ? orders[0] : DEFAULT_CHAT_ORDER));
+      : (orders.find(o => o.id === orderId) || (orders.length > 0 ? orders[0] : DEFAULT_CHAT_ORDER)));
     if (!text.trim()) return;
 
     const sessionKey = targetOrder.id || 'ORD-NUEVA-RECEPCION';
@@ -917,9 +1007,9 @@ export const WorkshopProvider = ({ children }) => {
       }));
     }
 
-    // Solo vincular a una orden existente si el usuario abrió explícitamente el chat desde la tarjeta de esa orden concreta
-    // Si estamos en 'ORD-NUEVA-RECEPCION', JAMÁS secuestrar una orden antigua para no resucitar coches o averías viejas
-    if (matchedClient && targetOrder.id !== 'ORD-NUEVA-RECEPCION' && orderId !== 'ORD-NUEVA-RECEPCION') {
+    // Solo vincular a una orden existente si el ID actual no existe como orden real y no estamos en 'ORD-NUEVA-RECEPCION'
+    const orderExistsById = Boolean(passedOrderObj || (orderId && orderId !== 'ORD-NUEVA-RECEPCION' && orders.some(o => o.id === orderId)));
+    if (matchedClient && !orderExistsById && targetOrder.id !== 'ORD-NUEVA-RECEPCION' && orderId !== 'ORD-NUEVA-RECEPCION') {
       const matchedOrderForClient = orders.find(
         o =>
           (matchedClient.dniNif && o.client?.dniNif?.toLowerCase() === matchedClient.dniNif.toLowerCase()) ||
@@ -1427,6 +1517,7 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
 
     const newOrder = {
       id: orderId,
+      updatedAt: Date.now(),
       portalToken: token,
       client: clientData,
       vehicle: vehicleData,
@@ -1472,6 +1563,8 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
     );
 
     let finalOrderId = orderId;
+    ordersMutationSeqRef.current += 1;
+    skipNextOrdersPushRef.current = false;
 
     setOrders(prev => {
       // 1. Coincidencia por ID de orden
@@ -1513,6 +1606,7 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
           ...existingOrder,
           ...newOrder,
           id: existingOrder.id,
+          updatedAt: Date.now(),
           status: targetStatus,
           problemDescription: finalProblem,
           client: { ...existingOrder.client, ...clientData },
@@ -1788,6 +1882,7 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
     const portalToken = buildPortalToken(orderId, vehicleData.licensePlate);
     const newOrder = {
       id: orderId,
+      updatedAt: Date.now(),
       portalToken,
       client: clientData,
       vehicle: {
@@ -1827,9 +1922,13 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
       }
     };
 
+    ordersMutationSeqRef.current += 1;
+    skipNextOrdersPushRef.current = false;
     setOrders(prev => [newOrder, ...prev]);
 
     // Registrar/actualizar cliente y vincular coche en la base de datos centralizada
+    clientsMutationSeqRef.current += 1;
+    skipNextClientsPushRef.current = false;
     setClients(prev => {
       const clientExists = prev.find(c => c.dniNif.toLowerCase() === clientData.dniNif.toLowerCase());
       if (clientExists) {
@@ -1853,23 +1952,29 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
 
   // Registrar el diagnóstico y presupuesto de una orden
   const saveDiagnosis = (orderId, diagnosisText, repairSubtotal, diagnosticCost = 50.00) => {
+    const nowTs = Date.now();
+    const nowIso = new Date(nowTs).toISOString();
+    const subtotal = parseFloat(repairSubtotal) || 0;
+    const diagCost = parseFloat(diagnosticCost) || 50.00;
     let updatedOrder = null;
+
+    ordersMutationSeqRef.current += 1;
+    skipNextOrdersPushRef.current = false;
+
     setOrders(prev => prev.map(order => {
       if (order.id !== orderId) return order;
 
-      const subtotal = parseFloat(repairSubtotal) || 0;
-      const diagCost = parseFloat(diagnosticCost) || 50.00;
-      
       // Cálculo financiero inicial (antes de aceptar, debe incluir el coste del diagnóstico)
       const base = subtotal + diagCost;
-      const total = base * (1 + order.financials.taxRate);
+      const total = base * (1 + (order.financials?.taxRate || 0.21));
 
       updatedOrder = {
         ...order,
+        updatedAt: nowTs,
         diagnosisText,
         timestamps: {
           ...order.timestamps,
-          diagnosisCompleted: new Date().toISOString()
+          diagnosisCompleted: nowIso
         },
         financials: {
           ...order.financials,
@@ -1883,21 +1988,23 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
 
     const targetOrder = orders.find(o => o.id === orderId);
     if (targetOrder) {
-      const subtotal = parseFloat(repairSubtotal) || 0;
-      const diagCost = parseFloat(diagnosticCost) || 50.00;
-      const total = (subtotal + diagCost) * (1 + targetOrder.financials.taxRate);
-      triggerN8nWebhook('diagnosis_saved', {
+      const total = (subtotal + diagCost) * (1 + (targetOrder.financials?.taxRate || 0.21));
+      const webhookOrder = {
         ...targetOrder,
+        updatedAt: nowTs,
         diagnosisText,
-        timestamps: { ...targetOrder.timestamps, diagnosisCompleted: new Date().toISOString() },
+        timestamps: { ...targetOrder.timestamps, diagnosisCompleted: nowIso },
         financials: {
           ...targetOrder.financials,
           diagnosticCost: diagCost,
           repairSubtotal: subtotal,
           totalDue: parseFloat(total.toFixed(2))
         }
-      });
+      };
+      triggerN8nWebhook('diagnosis_saved', webhookOrder);
+      return webhookOrder;
     }
+    return updatedOrder;
   };
 
   // Acción tomada por el cliente en el portal público (Aceptar / Posponer / Rechazar)
@@ -1927,6 +2034,7 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
 
       updatedForWebhook = {
         ...targetOrder,
+        updatedAt: Date.now(),
         status: nextStatus,
         timestamps: {
           ...targetOrder.timestamps,
@@ -1956,6 +2064,8 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
       };
 
       // Guardar referencia del PDF firmado dentro de la ficha técnica del cliente y del vehículo
+      clientsMutationSeqRef.current += 1;
+      skipNextClientsPushRef.current = false;
       setClients(prev => prev.map(client => {
         if (client.dniNif.toLowerCase() !== targetOrder.client.dniNif.toLowerCase()) return client;
         return {
@@ -1981,10 +2091,14 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
       }));
     }
 
-    setOrders(prev => prev.map(order => {
-      if (order.id !== orderId) return order;
-      return updatedForWebhook || order;
-    }));
+    ordersMutationSeqRef.current += 1;
+    skipNextOrdersPushRef.current = false;
+    setOrders(prev => {
+      if (prev.some(o => o.id === orderId)) {
+        return prev.map(order => order.id === orderId ? (updatedForWebhook || order) : order);
+      }
+      return updatedForWebhook ? [updatedForWebhook, ...prev] : prev;
+    });
 
     if (updatedForWebhook) {
       triggerN8nWebhook('client_decision', updatedForWebhook, { decision });
@@ -1995,6 +2109,8 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
 
   // Asignar o desasignar mecánicos a una orden (en Pendientes de Reparación o En Proceso)
   const toggleMechanicAssignment = (orderId, mechanicId) => {
+    ordersMutationSeqRef.current += 1;
+    skipNextOrdersPushRef.current = false;
     setOrders(prev => prev.map(order => {
       if (order.id !== orderId) return order;
 
@@ -2005,6 +2121,7 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
 
       return {
         ...order,
+        updatedAt: Date.now(),
         assignedMechanics: newAssigned
       };
     }));
@@ -2012,23 +2129,29 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
 
   // Iniciar la reparación (mover a "En Proceso" y estampar hora de inicio)
   const startRepair = (orderId) => {
+    const nowTs = Date.now();
+    const nowIso = new Date(nowTs).toISOString();
     const targetOrder = orders.find(o => o.id === orderId);
     if (targetOrder) {
       triggerN8nWebhook('repair_started', {
         ...targetOrder,
+        updatedAt: nowTs,
         status: 'en_proceso',
-        timestamps: { ...targetOrder.timestamps, repairStarted: new Date().toISOString() }
+        timestamps: { ...targetOrder.timestamps, repairStarted: nowIso }
       });
     }
+    ordersMutationSeqRef.current += 1;
+    skipNextOrdersPushRef.current = false;
     setOrders(prev => prev.map(order => {
       if (order.id !== orderId) return order;
 
       return {
         ...order,
+        updatedAt: nowTs,
         status: 'en_proceso',
         timestamps: {
           ...order.timestamps,
-          repairStarted: new Date().toISOString()
+          repairStarted: nowIso
         }
       };
     }));
@@ -2036,24 +2159,30 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
 
   // Finalizar la reparación (mover a "Reparados", heredar mecánicos automáticamente y registrar hora de fin)
   const completeRepair = (orderId) => {
+    const nowTs = Date.now();
+    const nowIso = new Date(nowTs).toISOString();
     const targetOrder = orders.find(o => o.id === orderId);
     if (targetOrder) {
       triggerN8nWebhook('repair_completed', {
         ...targetOrder,
+        updatedAt: nowTs,
         status: 'reparado',
-        timestamps: { ...targetOrder.timestamps, repairEnded: new Date().toISOString() }
+        timestamps: { ...targetOrder.timestamps, repairEnded: nowIso }
       });
     }
+    ordersMutationSeqRef.current += 1;
+    skipNextOrdersPushRef.current = false;
     setOrders(prev => prev.map(order => {
       if (order.id !== orderId) return order;
 
       return {
         ...order,
+        updatedAt: nowTs,
         status: 'reparado',
         // Hereda automáticamente 'assignedMechanics' (permanecen inalterados en la orden)
         timestamps: {
           ...order.timestamps,
-          repairEnded: new Date().toISOString()
+          repairEnded: nowIso
         }
       };
     }));
@@ -2061,17 +2190,22 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
 
   // Simular envío de WhatsApp de aviso de entrega y mover a "A Entregar"
   const sendDeliveryAlert = (orderId, whatsappText = '') => {
+    const nowTs = Date.now();
     const targetOrder = orders.find(o => o.id === orderId);
     if (targetOrder) {
       triggerN8nWebhook('whatsapp_delivery_sent', {
         ...targetOrder,
+        updatedAt: nowTs,
         status: 'a_entregar'
       }, { whatsappMessage: whatsappText });
     }
+    ordersMutationSeqRef.current += 1;
+    skipNextOrdersPushRef.current = false;
     setOrders(prev => prev.map(order => {
       if (order.id !== orderId) return order;
       return {
         ...order,
+        updatedAt: nowTs,
         status: 'a_entregar'
       };
     }));
@@ -2079,22 +2213,28 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
 
   // Registrar entrega física del vehículo
   const deliverVehicle = (orderId) => {
+    const nowTs = Date.now();
+    const nowIso = new Date(nowTs).toISOString();
     const targetOrder = orders.find(o => o.id === orderId);
     if (targetOrder) {
       triggerN8nWebhook('vehicle_delivered', {
         ...targetOrder,
+        updatedAt: nowTs,
         status: 'entregado',
-        timestamps: { ...targetOrder.timestamps, delivery: new Date().toISOString() }
+        timestamps: { ...targetOrder.timestamps, delivery: nowIso }
       });
     }
+    ordersMutationSeqRef.current += 1;
+    skipNextOrdersPushRef.current = false;
     setOrders(prev => prev.map(order => {
       if (order.id !== orderId) return order;
       return {
         ...order,
+        updatedAt: nowTs,
         status: 'entregado',
         timestamps: {
           ...order.timestamps,
-          delivery: new Date().toISOString()
+          delivery: nowIso
         }
       };
     }));
@@ -2102,6 +2242,8 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
 
   // Reabrir una orden pospuesta para iniciar la reparación
   const reopenPostponedOrder = (orderId) => {
+    const nowTs = Date.now();
+    const nowIso = new Date(nowTs).toISOString();
     const targetOrder = orders.find(o => o.id === orderId);
     if (targetOrder) {
       const clientName = targetOrder.client.fullName;
@@ -2109,6 +2251,8 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
       addNotification(`🔄 Caso REABIERTO y APROBADO por el taller para ${clientName} (${vehicleInfo}).`, 'success');
     }
 
+    ordersMutationSeqRef.current += 1;
+    skipNextOrdersPushRef.current = false;
     setOrders(prev => prev.map(order => {
       if (order.id !== orderId) return order;
 
@@ -2120,10 +2264,11 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
 
       return {
         ...order,
+        updatedAt: nowTs,
         status: 'pendiente', // Mueve de nuevo al Kanban
         timestamps: {
           ...order.timestamps,
-          approved: new Date().toISOString(),
+          approved: nowIso,
           delivery: null // Limpiamos la fecha de entrega previa
         },
         financials: {
@@ -2146,6 +2291,8 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
         localStorage.setItem('autoflow_deleted_client_dnis', JSON.stringify(filtered));
       } catch {}
     }
+    clientsMutationSeqRef.current += 1;
+    skipNextClientsPushRef.current = false;
     setClients(prev => {
       const clientExists = prev.find(c => c.dniNif.toLowerCase() === clientData.dniNif.toLowerCase());
       if (clientExists) {
@@ -2178,6 +2325,8 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
       }
     } catch {}
 
+    clientsMutationSeqRef.current += 1;
+    skipNextClientsPushRef.current = false;
     setClients(prev => {
       const nextClients = prev.filter(c => c.dniNif?.toUpperCase() !== cleanDni);
       try {
@@ -2208,6 +2357,8 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
       localStorage.setItem('autoflow_deleted_vehicle_plates', JSON.stringify(filtered));
     } catch {}
     
+    clientsMutationSeqRef.current += 1;
+    skipNextClientsPushRef.current = false;
     setClients(prev => {
       const nextClients = prev.map(c => {
         if (c.dniNif.toLowerCase() !== dniNif.toLowerCase()) return c;
@@ -2248,6 +2399,8 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
       }
     } catch {}
 
+    clientsMutationSeqRef.current += 1;
+    skipNextClientsPushRef.current = false;
     setClients(prev => {
       const nextClients = prev.map(c => {
         if (c.dniNif.toLowerCase() !== dniNif.toLowerCase()) return c;
@@ -2275,19 +2428,20 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
   // Vaciar todos los coches entregados del historial
   const clearDeliveredOrders = () => {
     const deliveredIds = orders.filter(o => o.status === 'entregado').map(o => o.id);
-    setOrders(prev => prev.filter(o => o.status !== 'entregado'));
     try {
       const saved = JSON.parse(localStorage.getItem('autoflow_deleted_order_ids') || '[]');
       const next = Array.from(new Set([...saved, ...deliveredIds]));
       localStorage.setItem('autoflow_deleted_order_ids', JSON.stringify(next));
     } catch {}
+    ordersMutationSeqRef.current += 1;
+    skipNextOrdersPushRef.current = false;
+    setOrders(prev => prev.filter(o => o.status !== 'entregado'));
     addToast('🧹 Historial de coches entregados vaciado', 'info');
   };
 
   // Eliminar una orden individual por ID de forma permanente
   const deleteOrder = (orderId) => {
     if (!orderId) return;
-    setOrders(prev => prev.filter(o => o.id !== orderId));
     try {
       const saved = JSON.parse(localStorage.getItem('autoflow_deleted_order_ids') || '[]');
       if (!saved.includes(orderId)) {
@@ -2295,6 +2449,9 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
         localStorage.setItem('autoflow_deleted_order_ids', JSON.stringify(saved));
       }
     } catch {}
+    ordersMutationSeqRef.current += 1;
+    skipNextOrdersPushRef.current = false;
+    setOrders(prev => prev.filter(o => o.id !== orderId));
     addToast(`🗑️ Registro ${orderId} eliminado`, 'info');
   };
 

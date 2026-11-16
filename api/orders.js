@@ -1,5 +1,80 @@
 import { getOrdersDb, saveOrdersDb, getClientsDb, saveClientsDb, isCloudDbActive } from './_db.js';
 
+const STATUS_RANK = {
+  recepcion: 1,
+  pendiente: 2,
+  en_proceso: 3,
+  reparado: 4,
+  a_entregar: 5,
+  entregado: 6
+};
+
+function mergeTwoOrders(orderA, orderB) {
+  if (!orderA) return orderB;
+  if (!orderB) return orderA;
+
+  const timeA = Number(orderA.updatedAt) || 0;
+  const timeB = Number(orderB.updatedAt) || 0;
+  const rankA = STATUS_RANK[orderA.status] || 0;
+  const rankB = STATUS_RANK[orderB.status] || 0;
+
+  let primary = orderB;
+  let secondary = orderA;
+
+  if (timeA > timeB) {
+    primary = orderA;
+    secondary = orderB;
+  } else if (timeB > timeA) {
+    primary = orderB;
+    secondary = orderA;
+  } else if (rankA > rankB) {
+    primary = orderA;
+    secondary = orderB;
+  } else if (rankB > rankA) {
+    primary = orderB;
+    secondary = orderA;
+  } else {
+    const scoreA = (orderA.diagnosisText ? 2 : 0) + ((orderA.assignedMechanics || []).length) + (orderA.signature?.signed ? 4 : 0);
+    const scoreB = (orderB.diagnosisText ? 2 : 0) + ((orderB.assignedMechanics || []).length) + (orderB.signature?.signed ? 4 : 0);
+    if (scoreA >= scoreB) {
+      primary = orderA;
+      secondary = orderB;
+    }
+  }
+
+  const subPrimary = parseFloat(primary.financials?.repairSubtotal) || 0;
+  const subSecondary = parseFloat(secondary.financials?.repairSubtotal) || 0;
+  const finalSubtotal = subPrimary > 0 ? subPrimary : Math.max(subPrimary, subSecondary);
+
+  const primarySigned = Boolean(primary.signature?.signed);
+  const secondarySigned = Boolean(secondary.signature?.signed);
+  const finalSignature = primarySigned ? primary.signature : (secondarySigned ? secondary.signature : (primary.signature || secondary.signature));
+
+  const finalMechanics = (Number(primary.updatedAt) || 0) > (Number(secondary.updatedAt) || 0)
+    ? (Array.isArray(primary.assignedMechanics) ? primary.assignedMechanics : [])
+    : ((primary.assignedMechanics || []).length >= (secondary.assignedMechanics || []).length
+        ? (primary.assignedMechanics || [])
+        : (secondary.assignedMechanics || []));
+
+  return {
+    ...secondary,
+    ...primary,
+    updatedAt: Math.max(timeA, timeB) || Date.now(),
+    diagnosisText: primary.diagnosisText || secondary.diagnosisText || '',
+    assignedMechanics: finalMechanics,
+    client: { ...(secondary.client || {}), ...(primary.client || {}) },
+    vehicle: { ...(secondary.vehicle || {}), ...(primary.vehicle || {}) },
+    timestamps: { ...(secondary.timestamps || {}), ...(primary.timestamps || {}) },
+    financials: {
+      ...(secondary.financials || {}),
+      ...(primary.financials || {}),
+      repairSubtotal: finalSubtotal
+    },
+    signature: finalSignature,
+    signedDocument: primary.signedDocument || secondary.signedDocument || null
+  };
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
@@ -14,15 +89,48 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
 
-    // Sincronización masiva de órdenes
+    // Sincronización masiva inteligente de órdenes (impide que un dispositivo con estado antiguo pise un cambio reciente)
     if (body.syncAll && Array.isArray(body.orders)) {
-      await saveOrdersDb(body.orders);
+      const deletedSet = new Set(Array.isArray(body.deletedOrderIds) ? body.deletedOrderIds : []);
+      const incomingMap = new Map();
+      body.orders.forEach(o => {
+        if (o && o.id && !deletedSet.has(o.id)) {
+          incomingMap.set(o.id, o);
+        }
+      });
+
+      const mergedOrders = [];
+      const processedIds = new Set();
+
+      // 1. Fusionar las órdenes entrantes con las que haya en base de datos, ganando siempre el estado más reciente
+      for (const [id, incOrder] of incomingMap.entries()) {
+        const dbMatch = orders.find(dbo => dbo && dbo.id === id);
+        if (dbMatch) {
+          mergedOrders.push(mergeTwoOrders(dbMatch, incOrder));
+        } else {
+          mergedOrders.push({ ...incOrder, updatedAt: Number(incOrder.updatedAt) || Date.now() });
+        }
+        processedIds.add(id);
+      }
+
+      // 2. Si en la base de datos había alguna orden recién creada hace pocos segundos (ej. por n8n u otro dispositivo) y no está borrada, conservarla
+      const now = Date.now();
+      for (const dbOrd of orders) {
+        if (dbOrd && dbOrd.id && !processedIds.has(dbOrd.id) && !deletedSet.has(dbOrd.id)) {
+          const ordTime = Number(dbOrd.updatedAt) || new Date(dbOrd.timestamps?.entry || 0).getTime() || 0;
+          if (now - ordTime < 25000) {
+            mergedOrders.unshift(dbOrd);
+          }
+        }
+      }
+
+      await saveOrdersDb(mergedOrders);
       return res.status(200).json({
         success: true,
         fromCloudDb: isCloudDbActive(),
         message: 'Base de datos de órdenes sincronizada correctamente',
-        count: body.orders.length,
-        orders: body.orders
+        count: mergedOrders.length,
+        orders: mergedOrders
       });
     }
 
@@ -44,6 +152,7 @@ export default async function handler(req, res) {
 
     const order = {
       id: orderId,
+      updatedAt: Date.now(),
       portalToken,
       portalUrl,
       status: body.status || 'recepcion',

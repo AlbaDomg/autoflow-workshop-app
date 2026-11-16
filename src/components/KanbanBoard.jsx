@@ -126,7 +126,7 @@ El coste del diagnóstico es de *${order.financials.diagnosticCost}€* (cargo o
     setWaMessage(text);
     setSelectedOrder(order);
     openWhatsAppChat(order.id);
-    await sendWhatsAppChatMessage(order.id, text, 'workshop');
+    await sendWhatsAppChatMessage(order, text, 'workshop');
   };
 
   const sendWhatsAppDelivery = async (order) => {
@@ -141,7 +141,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
     setSelectedOrder(order);
     sendDeliveryAlert(order.id, text);
     openWhatsAppChat(order.id);
-    await sendWhatsAppChatMessage(order.id, text, 'workshop');
+    await sendWhatsAppChatMessage(order, text, 'workshop');
   };
 
   // Filter orders by column status
@@ -619,8 +619,11 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                 type="button"
                 className="btn"
                 style={{ flex: 1.4, background: 'linear-gradient(135deg, #25D366, #128C7E)', color: '#fff' }}
-                onClick={() => {
-                  if (!diagnosisText.trim() || !repairSubtotal) return;
+                onClick={(e) => {
+                  if (!diagnosisText.trim() || !repairSubtotal) {
+                    e.currentTarget.form?.reportValidity();
+                    return;
+                  }
                   handleSaveDiagnosis(null, true);
                 }}
               >
