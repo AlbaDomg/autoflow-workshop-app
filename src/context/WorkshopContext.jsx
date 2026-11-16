@@ -411,6 +411,7 @@ export const WorkshopProvider = ({ children }) => {
   const [isWaAiTyping, setIsWaAiTyping] = useState(false);
   const ordersHydratedRef = useRef(false);
   const clientsHydratedRef = useRef(false);
+  const clientsInitialSeedDoneRef = useRef(false);
   const skipNextOrdersPushRef = useRef(false);
   const skipNextClientsPushRef = useRef(false);
 
@@ -424,8 +425,10 @@ export const WorkshopProvider = ({ children }) => {
             const deletedDnis = new Set(JSON.parse(localStorage.getItem('autoflow_deleted_client_dnis') || '[]'));
             const deletedPlates = new Set(JSON.parse(localStorage.getItem('autoflow_deleted_vehicle_plates') || '[]'));
 
-            // Si Neon DB está activa y ya sincronizada, reflejar cambios entre dispositivos (PC <-> Móvil)
-            if (res.fromCloudDb && clientsHydratedRef.current && res.clients.length > 0) {
+            // Si Neon DB está activa:
+            // - En la 1ª lectura inicial, fusionamos por si este navegador tenía fichas creadas antes de conectar Neon.
+            // - A partir de la 2ª lectura, Neon es la fuente única de verdad entre dispositivos (así los borrados y cambios en un dispositivo se ven en todos).
+            if (res.fromCloudDb) {
               const cleanedCloud = migrateClientsList(
                 res.clients
                   .filter(c => c && !deletedDnis.has(c.dniNif?.toUpperCase()))
@@ -435,32 +438,39 @@ export const WorkshopProvider = ({ children }) => {
                   }))
               );
               setClients(prev => {
-                // Si este navegador tiene un cliente recién creado que aún no subió a Neon, conservarlo y subirlo
-                const merged = [...cleanedCloud];
-                let localHasNew = false;
-                prev.forEach(lc => {
-                  if (lc && lc.dniNif && !deletedDnis.has(lc.dniNif.toUpperCase())) {
-                    const idx = merged.findIndex(mc => mc.dniNif?.toLowerCase() === lc.dniNif.toLowerCase());
-                    if (idx === -1) {
-                      merged.push(lc);
-                      localHasNew = true;
-                    } else {
-                      const mVehs = [...(merged[idx].vehicles || [])];
-                      (lc.vehicles || []).forEach(lv => {
-                        if (lv && lv.licensePlate && !deletedPlates.has(lv.licensePlate.toUpperCase()) &&
-                            !mVehs.some(v => v.licensePlate?.toLowerCase() === lv.licensePlate.toLowerCase())) {
-                          mVehs.push(lv);
-                          localHasNew = true;
-                        }
-                      });
-                      merged[idx] = { ...merged[idx], ...lc, vehicles: mVehs };
+                if (!clientsInitialSeedDoneRef.current) {
+                  clientsInitialSeedDoneRef.current = true;
+                  const merged = [...cleanedCloud];
+                  let localHasNew = false;
+                  prev.forEach(lc => {
+                    if (lc && lc.dniNif && !deletedDnis.has(lc.dniNif.toUpperCase())) {
+                      const idx = merged.findIndex(mc => mc.dniNif?.toLowerCase() === lc.dniNif.toLowerCase());
+                      if (idx === -1) {
+                        merged.push(lc);
+                        localHasNew = true;
+                      } else {
+                        const mVehs = [...(merged[idx].vehicles || [])];
+                        (lc.vehicles || []).forEach(lv => {
+                          if (lv && lv.licensePlate && !deletedPlates.has(lv.licensePlate.toUpperCase()) &&
+                              !mVehs.some(v => v.licensePlate?.toLowerCase() === lv.licensePlate.toLowerCase())) {
+                            mVehs.push(lv);
+                            localHasNew = true;
+                          }
+                        });
+                        merged[idx] = { ...merged[idx], ...lc, vehicles: mVehs };
+                      }
                     }
-                  }
-                });
-                const finalClients = migrateClientsList(merged);
-                if (JSON.stringify(prev) === JSON.stringify(finalClients)) return prev;
-                if (!localHasNew) skipNextClientsPushRef.current = true;
-                return finalClients;
+                  });
+                  const finalSeed = migrateClientsList(merged);
+                  if (JSON.stringify(prev) === JSON.stringify(finalSeed)) return prev;
+                  if (!localHasNew) skipNextClientsPushRef.current = true;
+                  return finalSeed;
+                }
+
+                // En lecturas sucesivas, Neon manda al 100% (altas, ediciones y borrados sincronizados entre PC y Móvil)
+                if (JSON.stringify(prev) === JSON.stringify(cleanedCloud)) return prev;
+                skipNextClientsPushRef.current = true;
+                return cleanedCloud;
               });
               return;
             }
