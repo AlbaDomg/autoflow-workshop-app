@@ -1,6 +1,6 @@
-import { getClientsDb, saveClientsDb } from './_db.js';
+import { getClientsDb, saveClientsDb, isCloudDbActive } from './_db.js';
 
-export default function handler(req, res) {
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -9,16 +9,17 @@ export default function handler(req, res) {
     return res.status(200).end();
   }
 
-  let clients = getClientsDb();
+  let clients = await getClientsDb();
 
   if (req.method === 'POST') {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
 
     // Sincronización masiva de clientes desde la aplicación React
     if (body.syncAll && Array.isArray(body.clients)) {
-      saveClientsDb(body.clients);
+      await saveClientsDb(body.clients);
       return res.status(200).json({
         success: true,
+        fromCloudDb: isCloudDbActive(),
         message: 'Base de datos de clientes sincronizada correctamente',
         count: body.clients.length,
         clients: body.clients
@@ -80,15 +81,16 @@ export default function handler(req, res) {
       clients.push(newClient);
     }
 
-    saveClientsDb(clients);
+    await saveClientsDb(clients);
 
     return res.status(200).json({
       success: true,
+      fromCloudDb: isCloudDbActive(),
       message: `Cliente ${fullName} registrado correctamente`,
       client: newClient,
       clients
     });
   }
 
-  return res.status(200).json({ success: true, count: clients.length, clients });
+  return res.status(200).json({ success: true, fromCloudDb: isCloudDbActive(), count: clients.length, clients });
 }

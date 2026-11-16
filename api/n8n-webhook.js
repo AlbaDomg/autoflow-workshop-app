@@ -25,7 +25,7 @@ export default async function handler(req, res) {
     // Sincronizar dinámicamente el perfil del cliente y sus vehículos en la base de datos backend
     if (body.existingClientProfile && body.existingClientProfile.dniNif) {
       try {
-        const clients = getClientsDb();
+        const clients = await getClientsDb();
         const profDni = String(body.existingClientProfile.dniNif).trim().toUpperCase();
         const cIdx = clients.findIndex(c => c.dniNif?.toUpperCase() === profDni);
         const incomingVehicles = Array.isArray(body.vehicles) && body.vehicles.length > 0
@@ -45,13 +45,13 @@ export default async function handler(req, res) {
             ...body.existingClientProfile,
             vehicles: mergedVehicles
           };
-          saveClientsDb(clients);
+          await saveClientsDb(clients);
         } else if (profDni) {
           clients.push({
             ...body.existingClientProfile,
             vehicles: incomingVehicles
           });
-          saveClientsDb(clients);
+          await saveClientsDb(clients);
         }
       } catch (errDb) {
         console.warn('Error sincronizando perfil en db backend:', errDb);

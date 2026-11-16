@@ -14,13 +14,13 @@ export default async function handler(req, res) {
   const plate = (body.licensePlate || body.plate || '').trim().toUpperCase();
 
   if (dni && plate) {
-    const clients = getClientsDb();
+    const clients = await getClientsDb();
     const updated = clients.map(c => {
       if (c.dniNif?.toUpperCase() !== dni) return c;
       const vehicles = (c.vehicles || []).filter(v => v.licensePlate?.toUpperCase() !== plate);
       return { ...c, vehicles };
     });
-    saveClientsDb(updated);
+    await saveClientsDb(updated);
   }
 
   return res.status(200).json({

@@ -1,6 +1,6 @@
 import { getClientsDb } from '../_db.js';
 
-export default function handler(req, res) {
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -17,7 +17,7 @@ export default function handler(req, res) {
   const plateQuery = (query.plate || query.matricula || query.licensePlate || body.plate || body.matricula || body.licensePlate || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
   const genericQuery = (query.q || body.q || '').trim();
 
-  const clients = getClientsDb();
+  const clients = await getClientsDb();
 
   let matched = null;
 

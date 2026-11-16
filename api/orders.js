@@ -1,6 +1,6 @@
-import { getOrdersDb, saveOrdersDb, getClientsDb, saveClientsDb } from './_db.js';
+import { getOrdersDb, saveOrdersDb, getClientsDb, saveClientsDb, isCloudDbActive } from './_db.js';
 
-export default function handler(req, res) {
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -9,16 +9,17 @@ export default function handler(req, res) {
     return res.status(200).end();
   }
 
-  let orders = getOrdersDb();
+  let orders = await getOrdersDb();
 
   if (req.method === 'POST') {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
 
     // Sincronización masiva de órdenes
     if (body.syncAll && Array.isArray(body.orders)) {
-      saveOrdersDb(body.orders);
+      await saveOrdersDb(body.orders);
       return res.status(200).json({
         success: true,
+        fromCloudDb: isCloudDbActive(),
         message: 'Base de datos de órdenes sincronizada correctamente',
         count: body.orders.length,
         orders: body.orders
@@ -80,11 +81,11 @@ export default function handler(req, res) {
     } else {
       orders.unshift(order);
     }
-    saveOrdersDb(orders);
+    await saveOrdersDb(orders);
 
     // Si además vienen datos completos de cliente, registrarlo o sincronizarlo en clients-db
     if (clientDni && clientFullName !== 'Cliente') {
-      const clients = getClientsDb();
+      const clients = await getClientsDb();
       const cIdx = clients.findIndex(c => c.dniNif?.toUpperCase() === clientDni);
       const vehicleObj = {
         brand: vehicleBrand,
@@ -114,11 +115,12 @@ export default function handler(req, res) {
           vehicles: plate ? [vehicleObj] : []
         });
       }
-      saveClientsDb(clients);
+      await saveClientsDb(clients);
     }
 
     return res.status(200).json({
       success: true,
+      fromCloudDb: isCloudDbActive(),
       message: 'Tarjeta generada automáticamente en el panel de Recepción',
       orderId,
       portalToken,
@@ -128,5 +130,5 @@ export default function handler(req, res) {
     });
   }
 
-  return res.status(200).json({ success: true, count: orders.length, orders });
+  return res.status(200).json({ success: true, fromCloudDb: isCloudDbActive(), count: orders.length, orders });
 }

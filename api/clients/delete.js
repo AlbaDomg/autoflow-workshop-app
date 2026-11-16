@@ -13,9 +13,9 @@ export default async function handler(req, res) {
   const dni = (body.dniNif || body.dni || '').trim().toUpperCase();
 
   if (dni) {
-    const clients = getClientsDb();
+    const clients = await getClientsDb();
     const filtered = clients.filter(c => c.dniNif?.toUpperCase() !== dni);
-    saveClientsDb(filtered);
+    await saveClientsDb(filtered);
   }
 
   return res.status(200).json({

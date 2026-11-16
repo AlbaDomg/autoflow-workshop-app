@@ -357,18 +357,6 @@ export default function ClientPortalSimulator({ token }) {
               >
                 📄 Descargar PDF Oficial Firmado
               </button>
-
-              <button
-                type="button"
-                className="btn btn-secondary"
-                style={{ width: '100%', padding: '0.55rem', fontSize: '0.78rem' }}
-                onClick={() => {
-                  setSubmitted(false);
-                  setForceShowForm(true);
-                }}
-              >
-                🔄 Volver a mostrar opciones (Aceptar / Posponer / Rechazar)
-              </button>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', fontSize: '0.85rem' }}>

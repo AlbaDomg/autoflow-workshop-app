@@ -309,10 +309,22 @@ export const WorkshopProvider = ({ children }) => {
   const [mechanics] = useState(INITIAL_MECHANICS);
   const [activeTab, setActiveTab] = useState('kanban'); // kanban | clients | reception | completed-history | analytics
 
-  // Notificaciones persistentes
+  // Notificaciones persistentes (sin duplicados)
   const [notifications, setNotifications] = useState(() => {
     const saved = localStorage.getItem('autoflow_notifications');
-    return saved ? JSON.parse(saved) : [];
+    if (!saved) return [];
+    try {
+      const list = JSON.parse(saved);
+      if (!Array.isArray(list)) return [];
+      const seen = new Set();
+      return list.filter(n => {
+        if (!n || !n.message || seen.has(n.message)) return false;
+        seen.add(n.message);
+        return true;
+      });
+    } catch {
+      return [];
+    }
   });
 
   // Toasts en pantalla (temporales)
@@ -399,139 +411,233 @@ export const WorkshopProvider = ({ children }) => {
   const [isWaAiTyping, setIsWaAiTyping] = useState(false);
   const ordersHydratedRef = useRef(false);
   const clientsHydratedRef = useRef(false);
+  const skipNextOrdersPushRef = useRef(false);
+  const skipNextClientsPushRef = useRef(false);
 
   useEffect(() => {
-    // Sincronizar clientes con la base de datos backend (clients-db.json)
-    fetch('/api/clients')
-      .then(r => r.json())
-      .then(res => {
-        if (res && res.success && Array.isArray(res.clients) && res.clients.length > 0) {
-          const deletedDnis = new Set(JSON.parse(localStorage.getItem('autoflow_deleted_client_dnis') || '[]'));
-          const deletedPlates = new Set(JSON.parse(localStorage.getItem('autoflow_deleted_vehicle_plates') || '[]'));
-          const validDbClients = res.clients
-            .filter(c => c && !deletedDnis.has(c.dniNif?.toUpperCase()))
-            .map(c => ({
-              ...c,
-              vehicles: (c.vehicles || []).filter(v => v && !deletedPlates.has(v.licensePlate?.toUpperCase()))
-            }));
-
-          setClients(prev => {
-            const currentClients = Array.isArray(prev) && prev.length > 0 ? prev : validDbClients;
-            const updated = currentClients
-              .filter(c => c && !deletedDnis.has(c.dniNif?.toUpperCase()))
-              .map(c => {
-                const dbMatch = validDbClients.find(dbc => dbc.dniNif?.toLowerCase() === c.dniNif?.toLowerCase());
-                const allVehicles = [...(c.vehicles || [])];
-                if (dbMatch && Array.isArray(dbMatch.vehicles)) {
-                  dbMatch.vehicles.forEach(dbv => {
-                    if (
-                      dbv &&
-                      dbv.licensePlate &&
-                      !deletedPlates.has(dbv.licensePlate.toUpperCase()) &&
-                      !allVehicles.some(v => v.licensePlate.toLowerCase() === dbv.licensePlate.toLowerCase())
-                    ) {
-                      allVehicles.push(dbv);
-                    }
-                  });
-                }
-                return {
-                  ...(dbMatch || {}),
-                  ...c,
-                  vehicles: allVehicles.filter(v => v && !deletedPlates.has(v.licensePlate?.toUpperCase()))
-                };
-              });
-
-            validDbClients.forEach(dbc => {
-              if (!deletedDnis.has(dbc.dniNif?.toUpperCase()) && !updated.some(c => c.dniNif?.toLowerCase() === dbc.dniNif?.toLowerCase())) {
-                updated.push({
-                  ...dbc,
-                  vehicles: (dbc.vehicles || []).filter(v => v && !deletedPlates.has(v.licensePlate?.toUpperCase()))
-                });
-              }
-            });
-
-            return migrateClientsList(updated);
-          });
-        } else {
-          setClients(prev => migrateClientsList(prev));
-        }
-      })
-      .catch(() => {
-        setClients(prev => migrateClientsList(prev));
-      });
-
-    // Sincronizar órdenes con la base de datos backend (orders-db.json) y mantener sondeo en tiempo real
-    const syncOrdersWithBackend = () => {
-      fetch('/api/orders')
+    // Sincronizar clientes en tiempo real con el backend (Neon PostgreSQL / API)
+    const syncClientsWithBackend = () => {
+      fetch('/api/clients')
         .then(r => r.json())
         .then(res => {
-          if (res && res.success && Array.isArray(res.orders) && res.orders.length > 0) {
-            const deleted = new Set(JSON.parse(localStorage.getItem('autoflow_deleted_order_ids') || '[]'));
-            const validDbOrders = res.orders.filter(o => o && !deleted.has(o.id));
-            setOrders(prev => {
-              const merged = [...prev];
-              validDbOrders.forEach(dbOrder => {
-                const idx = merged.findIndex(o => o.id === dbOrder.id);
-                if (idx >= 0) {
-                  // Preservar valores de diagnóstico y presupuesto sin permitir que un 0 sobreescriba un importe real
-                  const localSubtotal = parseFloat(merged[idx].financials?.repairSubtotal) || 0;
-                  const dbSubtotal = parseFloat(dbOrder.financials?.repairSubtotal) || 0;
-                  const finalSubtotal = Math.max(localSubtotal, dbSubtotal);
+          if (res && res.success && Array.isArray(res.clients)) {
+            const deletedDnis = new Set(JSON.parse(localStorage.getItem('autoflow_deleted_client_dnis') || '[]'));
+            const deletedPlates = new Set(JSON.parse(localStorage.getItem('autoflow_deleted_vehicle_plates') || '[]'));
 
-                  merged[idx] = {
-                    ...dbOrder,
-                    ...merged[idx],
-                    financials: {
-                      ...dbOrder.financials,
-                      ...merged[idx].financials,
-                      repairSubtotal: finalSubtotal,
-                      totalDue: finalSubtotal > 0 && (merged[idx].financials?.hasAcceptedRepair === 'approved' || dbOrder.financials?.hasAcceptedRepair === 'approved')
-                        ? parseFloat((finalSubtotal * (1 + (merged[idx].financials?.taxRate || 0.21))).toFixed(2))
-                        : (merged[idx].financials?.totalDue || dbOrder.financials?.totalDue)
+            // Si Neon DB está activa y ya sincronizada, reflejar cambios entre dispositivos (PC <-> Móvil)
+            if (res.fromCloudDb && clientsHydratedRef.current && res.clients.length > 0) {
+              const cleanedCloud = migrateClientsList(
+                res.clients
+                  .filter(c => c && !deletedDnis.has(c.dniNif?.toUpperCase()))
+                  .map(c => ({
+                    ...c,
+                    vehicles: (c.vehicles || []).filter(v => v && !deletedPlates.has(v.licensePlate?.toUpperCase()))
+                  }))
+              );
+              setClients(prev => {
+                // Si este navegador tiene un cliente recién creado que aún no subió a Neon, conservarlo y subirlo
+                const merged = [...cleanedCloud];
+                let localHasNew = false;
+                prev.forEach(lc => {
+                  if (lc && lc.dniNif && !deletedDnis.has(lc.dniNif.toUpperCase())) {
+                    const idx = merged.findIndex(mc => mc.dniNif?.toLowerCase() === lc.dniNif.toLowerCase());
+                    if (idx === -1) {
+                      merged.push(lc);
+                      localHasNew = true;
+                    } else {
+                      const mVehs = [...(merged[idx].vehicles || [])];
+                      (lc.vehicles || []).forEach(lv => {
+                        if (lv && lv.licensePlate && !deletedPlates.has(lv.licensePlate.toUpperCase()) &&
+                            !mVehs.some(v => v.licensePlate?.toLowerCase() === lv.licensePlate.toLowerCase())) {
+                          mVehs.push(lv);
+                          localHasNew = true;
+                        }
+                      });
+                      merged[idx] = { ...merged[idx], ...lc, vehicles: mVehs };
                     }
-                  };
-                } else {
-                  merged.unshift(dbOrder);
-                }
+                  }
+                });
+                const finalClients = migrateClientsList(merged);
+                if (JSON.stringify(prev) === JSON.stringify(finalClients)) return prev;
+                if (!localHasNew) skipNextClientsPushRef.current = true;
+                return finalClients;
               });
-              return ensureOrdersHaveTokens(merged);
-            });
+              return;
+            }
+
+            if (res.clients.length > 0) {
+              const validDbClients = res.clients
+                .filter(c => c && !deletedDnis.has(c.dniNif?.toUpperCase()))
+                .map(c => ({
+                  ...c,
+                  vehicles: (c.vehicles || []).filter(v => v && !deletedPlates.has(v.licensePlate?.toUpperCase()))
+                }));
+
+              setClients(prev => {
+                const currentClients = Array.isArray(prev) && prev.length > 0 ? prev : validDbClients;
+                const updated = currentClients
+                  .filter(c => c && !deletedDnis.has(c.dniNif?.toUpperCase()))
+                  .map(c => {
+                    const dbMatch = validDbClients.find(dbc => dbc.dniNif?.toLowerCase() === c.dniNif?.toLowerCase());
+                    const allVehicles = [...(c.vehicles || [])];
+                    if (dbMatch && Array.isArray(dbMatch.vehicles)) {
+                      dbMatch.vehicles.forEach(dbv => {
+                        if (
+                          dbv &&
+                          dbv.licensePlate &&
+                          !deletedPlates.has(dbv.licensePlate.toUpperCase()) &&
+                          !allVehicles.some(v => v.licensePlate.toLowerCase() === dbv.licensePlate.toLowerCase())
+                        ) {
+                          allVehicles.push(dbv);
+                        }
+                      });
+                    }
+                    return {
+                      ...(dbMatch || {}),
+                      ...c,
+                      vehicles: allVehicles.filter(v => v && !deletedPlates.has(v.licensePlate?.toUpperCase()))
+                    };
+                  });
+
+                validDbClients.forEach(dbc => {
+                  if (!deletedDnis.has(dbc.dniNif?.toUpperCase()) && !updated.some(c => c.dniNif?.toLowerCase() === dbc.dniNif?.toLowerCase())) {
+                    updated.push({
+                      ...dbc,
+                      vehicles: (dbc.vehicles || []).filter(v => v && !deletedPlates.has(v.licensePlate?.toUpperCase()))
+                    });
+                  }
+                });
+
+                const finalList = migrateClientsList(updated);
+                if (JSON.stringify(prev) === JSON.stringify(finalList)) return prev;
+                return finalList;
+              });
+            }
           }
         })
         .catch(() => {});
     };
 
+    // Sincronizar órdenes en tiempo real con el backend (Neon PostgreSQL / API)
+    const syncOrdersWithBackend = () => {
+      fetch('/api/orders')
+        .then(r => r.json())
+        .then(res => {
+          if (res && res.success && Array.isArray(res.orders)) {
+            const deleted = new Set(JSON.parse(localStorage.getItem('autoflow_deleted_order_ids') || '[]'));
+            const validDbOrders = res.orders.filter(o => o && !deleted.has(o.id));
+
+            if (res.fromCloudDb) {
+              setOrders(prev => {
+                // Conservar órdenes locales no borradas y fusionar estados más avanzados desde Neon DB
+                const merged = [...validDbOrders];
+                let localHasUnpushed = false;
+                prev.forEach(lo => {
+                  if (lo && !deleted.has(lo.id)) {
+                    const idx = merged.findIndex(mo => mo.id === lo.id);
+                    if (idx === -1 && res.orders.length === 0) {
+                      merged.push(lo);
+                      localHasUnpushed = true;
+                    } else if (idx >= 0) {
+                      const localSubtotal = parseFloat(lo.financials?.repairSubtotal) || 0;
+                      const dbSubtotal = parseFloat(merged[idx].financials?.repairSubtotal) || 0;
+                      const finalSubtotal = Math.max(localSubtotal, dbSubtotal);
+                      merged[idx] = {
+                        ...lo,
+                        ...merged[idx],
+                        financials: {
+                          ...lo.financials,
+                          ...merged[idx].financials,
+                          repairSubtotal: finalSubtotal
+                        }
+                      };
+                    }
+                  }
+                });
+                const finalOrders = ensureOrdersHaveTokens(merged);
+                if (JSON.stringify(prev) === JSON.stringify(finalOrders)) return prev;
+                if (!localHasUnpushed) skipNextOrdersPushRef.current = true;
+                return finalOrders;
+              });
+              return;
+            }
+
+            if (validDbOrders.length > 0) {
+              setOrders(prev => {
+                const merged = [...prev];
+                validDbOrders.forEach(dbOrder => {
+                  const idx = merged.findIndex(o => o.id === dbOrder.id);
+                  if (idx >= 0) {
+                    const localSubtotal = parseFloat(merged[idx].financials?.repairSubtotal) || 0;
+                    const dbSubtotal = parseFloat(dbOrder.financials?.repairSubtotal) || 0;
+                    const finalSubtotal = Math.max(localSubtotal, dbSubtotal);
+
+                    merged[idx] = {
+                      ...dbOrder,
+                      ...merged[idx],
+                      financials: {
+                        ...dbOrder.financials,
+                        ...merged[idx].financials,
+                        repairSubtotal: finalSubtotal,
+                        totalDue: finalSubtotal > 0 && (merged[idx].financials?.hasAcceptedRepair === 'approved' || dbOrder.financials?.hasAcceptedRepair === 'approved')
+                          ? parseFloat((finalSubtotal * (1 + (merged[idx].financials?.taxRate || 0.21))).toFixed(2))
+                          : (merged[idx].financials?.totalDue || dbOrder.financials?.totalDue)
+                      }
+                    };
+                  } else {
+                    merged.unshift(dbOrder);
+                  }
+                });
+                const finalOrders = ensureOrdersHaveTokens(merged);
+                if (JSON.stringify(prev) === JSON.stringify(finalOrders)) return prev;
+                return finalOrders;
+              });
+            }
+          }
+        })
+        .catch(() => {});
+    };
+
+    syncClientsWithBackend();
     syncOrdersWithBackend();
-    const orderSyncInterval = setInterval(syncOrdersWithBackend, 4000);
-    return () => clearInterval(orderSyncInterval);
+    const syncInterval = setInterval(() => {
+      syncClientsWithBackend();
+      syncOrdersWithBackend();
+    }, 3500);
+    return () => clearInterval(syncInterval);
   }, []);
 
   useEffect(() => {
     localStorage.setItem('autoflow_orders', JSON.stringify(orders));
-    // Sincronizar con el backend. La primera ejecución (montaje) NO envía nada para no pisar datos del servidor;
-    // a partir de ahí se envía siempre, INCLUSO la lista vacía (así borrar la última tarjeta también se mantiene).
     if (!ordersHydratedRef.current) {
       ordersHydratedRef.current = true;
-    } else {
-      fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ syncAll: true, orders })
-      }).catch(() => {});
+      if (orders.length === 0) return;
     }
+    if (skipNextOrdersPushRef.current) {
+      skipNextOrdersPushRef.current = false;
+      return;
+    }
+    fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ syncAll: true, orders })
+    }).catch(() => {});
   }, [orders]);
 
   useEffect(() => {
     localStorage.setItem('autoflow_clients', JSON.stringify(clients));
     if (!clientsHydratedRef.current) {
       clientsHydratedRef.current = true;
-    } else {
-      fetch('/api/clients', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ syncAll: true, clients })
-      }).catch(() => {});
     }
+    if (skipNextClientsPushRef.current) {
+      skipNextClientsPushRef.current = false;
+      return;
+    }
+    fetch('/api/clients', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ syncAll: true, clients })
+    }).catch(() => {});
   }, [clients]);
 
   useEffect(() => {
@@ -1320,6 +1426,14 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
       }
     };
 
+    const alreadyExistsInRecepcion = orders.some(o =>
+      o.id === orderId ||
+      (targetStatus === 'recepcion' && o.status === 'recepcion' && (
+        (vehicleData.licensePlate && o.vehicle?.licensePlate && o.vehicle.licensePlate.toLowerCase() === vehicleData.licensePlate.toLowerCase()) ||
+        (clientData.dniNif && o.client?.dniNif && o.client.dniNif.toLowerCase() === clientData.dniNif.toLowerCase())
+      ))
+    );
+
     let finalOrderId = orderId;
 
     setOrders(prev => {
@@ -1428,9 +1542,10 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
     activeWaOrderIdRef.current = finalOrderId;
     setActiveWaOrderId(finalOrderId);
     setIsWaDrawerOpen(true);
-    addToast(`🚗 Tarjeta de ${clientData.fullName} sincronizada en RECEPCIÓN (${finalOrderId})`, 'success');
-    addNotification(`🚗 Tarjeta en RECEPCIÓN para ${clientData.fullName} (${vehicleData.brand} ${vehicleData.model}): "${problemDesc}"`, 'info');
-    return newOrder;
+    if (!alreadyExistsInRecepcion) {
+      addToast(`🚗 Tarjeta de ${clientData.fullName} sincronizada en RECEPCIÓN (${finalOrderId})`, 'success');
+      addNotification(`🚗 Tarjeta en RECEPCIÓN para ${clientData.fullName} (${vehicleData.brand} ${vehicleData.model}): "${problemDesc}"`, 'info');
+    }
     return newOrder;
   };
 
@@ -1525,15 +1640,23 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
   }, []);
 
   const addNotification = (message, type = 'info') => {
-    const newNotif = {
-      id: `NOTIF-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      message,
-      type, // 'success' | 'warning' | 'danger' | 'info'
-      read: false,
-      createdAt: new Date().toISOString()
-    };
-    setNotifications(prev => [newNotif, ...prev]);
-    addToast(message, type);
+    const cleanMsg = String(message || '').trim();
+    if (!cleanMsg) return;
+    setNotifications(prev => {
+      // Evitar notificaciones repetidas con el mismo texto
+      if (prev.some(n => n.message === cleanMsg)) {
+        return prev;
+      }
+      const newNotif = {
+        id: `NOTIF-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        message: cleanMsg,
+        type, // 'success' | 'warning' | 'danger' | 'info'
+        read: false,
+        createdAt: new Date().toISOString()
+      };
+      return [newNotif, ...prev];
+    });
+    addToast(cleanMsg, type);
   };
 
   const addToast = (message, type = 'info') => {
