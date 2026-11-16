@@ -834,8 +834,8 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
 1. Este cliente YA ESTÁ IDENTIFICADO y su DNI (${matchedClient.dniNif}) y teléfono (${matchedClient.phone}) ya constan en su ficha técnica y en este mensaje. TIENES TERMINANTEMENTE PROHIBIDO VOLVER A PEDIR SU DNI, NIF, TELÉFONO O CONFIRMAR DATOS PERSONALES.
 2. Si el cliente indica el motivo de la avería o revisión, genera INMEDIATAMENTE la tarjeta de recepción usando su teléfono registrado (${matchedClient.phone}). Sus kilómetros ya están registrados (${activeVehicle.mileage || 55000} km), así que NO le vuelvas a pedir el kilometraje ni datos que ya constan en su ficha.
 3. REGLA CRÍTICA DE GOOGLE CALENDAR Y HORARIO (LUNES A VIERNES DE 08:00 A 16:00):
-   - Los eventos que devuelve Consultar_Citas_Calendar son CITAS YA OCUPADAS (NO son huecos disponibles). ¡JAMÁS ofrezcas al cliente una hora que aparezca devuelta por Consultar_Citas_Calendar!
-   - Las horas disponibles para ofrecer o agendar son ÚNICAMENTE de Lunes a Viernes entre las 08:00 y las 16:00 que NO estén ocupadas en Calendar.
+   - Los eventos que devuelve Consultar_Citas_Calendar son CITAS YA OCUPADAS POR OTROS COCHES (PROHIBIDAS).
+   - REGLA OBLIGATORIA AL PROPONER HORAS DE UN DÍA: Si Consultar_Citas_Calendar devuelve eventos ese día (por ejemplo a las 09:00 y a las 14:00), DEBES nombrarlas primero como OCUPADAS y luego ofrecer horas distintas: "Para ese día ya tenemos ocupadas las [horas del nodo], pero tengo hueco libre a las [otras horas entre 08:00 y 16:00 distintas a esas]". Si no devuelve ningún evento, ofrece por ejemplo las 09:00, 11:00 o 13:00.
    - TIENES TERMINANTEMENTE PROHIBIDO ofrecer o agendar citas después de las 16:00 (17:00, 18:00, 19:00 están fuera de horario) ni en sábado o domingo.`;
       } else if (hasMultipleVehicles) {
         const vehiclesList = clientVehicles.map((v, i) => `${i + 1}) ${v.brand} ${v.model} (matrícula: ${v.licensePlate})`).join(', ');
