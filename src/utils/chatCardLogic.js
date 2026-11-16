@@ -4,8 +4,10 @@ export const isCourtesyText = (t) => {
   if (!clean) return true;
   // Respuestas cortas de palabra COMPLETA ("no arranca" NO es cortesía)
   if (/^(si|sí|no|bien|vale|ok|okey|okay|porfa|por favor|gracias|genial|perfecto|listo)[\s.,!¡?]*$/i.test(clean)) return true;
-  // Cortesías y despedidas en mensajes cortos (palabra completa)
-  if (clean.length < 45 && /^(genial|gracias|muchas gracias|muchísimas gracias|perfecto|vale|ok|okey|okay|de nada|adios|adiós|hasta luego|hasta pronto|entendido|listo|de acuerdo|nos vemos|fenomenal|estupendo|estupenda|guay)(?![a-záéíóúñ])/i.test(clean)) return true;
+  // Cortesías y despedidas en mensajes cortos (palabra completa), incluyendo "genial pasaré mañana", "vale paso mañana", etc.
+  if (clean.length < 55 && /^(genial|gracias|muchas gracias|muchísimas gracias|perfecto|vale|ok|okey|okay|de nada|adios|adiós|hasta luego|hasta pronto|entendido|listo|de acuerdo|nos vemos|fenomenal|estupendo|estupenda|guay)(?![a-záéíóúñ])/i.test(clean)) return true;
+  // Confirmaciones de recogida del vehículo ("paso mañana", "pasaré mañana a buscarlo", "voy mañana a por él")
+  if (/\b(pasar[eé]|paso\s+mañana|paso\s+hoy|paso\s+el\s+|ir[eé]\s+mañana|voy\s+mañana|a\s+recogerlo|a\s+buscarlo|a\s+retirarlo)\b/i.test(clean)) return true;
   // Fechas y horarios de cita
   if (/^(pasado mañana|mañana|hoy|el (lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)|a las \d+|el \d{1,2}\b|\d{1,2}[/:]\d{1,2})/i.test(clean)) return true;
   // Peticiones de cambio/cancelación de cita o llamada (no son averías mecánicas)
@@ -246,8 +248,45 @@ export const extractDetectedProblem = (aiReply = '', chatHistory = [], parsed = 
 
 // Decide si hay que crear/actualizar la tarjeta de Recepción.
 // RED DE SEGURIDAD: si la IA afirma haber creado la tarjeta/ficha, la app SIEMPRE la crea (aunque no haya reconocido el coche).
-export const decideCardCreation = ({ aiReply = '', detectedProblem = '', candidateVehicle = null }) => {
+export const decideCardCreation = ({
+  text = '',
+  aiReply = '',
+  detectedProblem = '',
+  candidateVehicle = null,
+  chatHistory = [],
+  orderInActiveWorkshopStage = false
+}) => {
   const replyLower = aiReply.toLowerCase();
+
+  // Detectar si esta conversación ya pasó por presupuesto o aviso de recogida de vehículo reparado
+  const allMsgs = [...(Array.isArray(chatHistory) ? chatHistory : []), { sender: 'ai', text: aiReply }];
+  const historyHasPostReception = allMsgs.some(m =>
+    m?.portalUrl ||
+    /\/portal\/|listo\s+para\s+ser\s+retirado|revisa\s+y\s+firma\s+digitalmente|importe\s+total\s+es\s+de/i.test(m?.text || '')
+  );
+
+  // Si la orden ya está en fases posteriores del taller (Pendientes, En Proceso, Reparados, A Entregar)
+  // o si en este hilo de chat ya se envió el presupuesto o el aviso de coche listo para retirar,
+  // JAMÁS volver a crear una tarjeta en Recepción.
+  if (orderInActiveWorkshopStage || historyHasPostReception) {
+    return { create: false, viaSafetyNet: false, hasChosenVehicle: false, hasRealProblem: false, aiClaimsCreated: false };
+  }
+
+  // La IA AFIRMA que ya ha creado algo (tarjeta, ficha o visita registrada)
+  const aiClaimsCreated =
+    /(?:he|hemos)\s+(?:generado|creado|registrado|abierto)\s+(?:ya\s+)?(?:la|una|tu|su)?\s*(?:tarjeta|ficha|visita|orden)/i.test(aiReply) ||
+    /(?:tarjeta|ficha)\s+(?:de\s+recepci[oó]n\s+)?(?:ha\s+sido\s+|queda\s+|est[aá]\s+)?(?:generada|creada|registrada)/i.test(aiReply) ||
+    /(?:queda|ha\s+quedado)\s+registrad[ao]/i.test(aiReply);
+
+  const isAppointmentBookedNow =
+    /(?:cita\s+(?:ha sido\s+)?agendada|cita\s+confirmada|cita\s+programada|he\s+agendado\s+tu\s+cita)/i.test(aiReply);
+
+  // Si el mensaje actual del cliente es una cortesía, despedida o aviso de recogida ("genial pasaré mañana", "gracias", "ok")
+  // y la IA no está creando la tarjeta ni agendando cita en este turno, NO crear ni tocar tarjetas.
+  if (text && isCourtesyText(text) && !aiClaimsCreated && !isAppointmentBookedNow) {
+    return { create: false, viaSafetyNet: false, hasChosenVehicle: false, hasRealProblem: false, aiClaimsCreated: false };
+  }
+
   const hasChosenVehicle = Boolean(
     candidateVehicle && candidateVehicle.brand && candidateVehicle.brand !== 'Vehículo' &&
     (candidateVehicle.licensePlate || candidateVehicle.model)
@@ -259,17 +298,10 @@ export const decideCardCreation = ({ aiReply = '', detectedProblem = '', candida
 
   const isAskingQuestion = /(?:¿?con cu[aá]l de ellos|cu[eé]ntame el motivo|ind[ií]came el motivo|¿?qu[eé] d[ií]a|en qu[eé] puedo ayudarte|podr[ií]as proporcionarme|el taller se pondr[aá] en contacto)/i.test(aiReply);
 
-  // La IA AFIRMA que ya ha creado algo (tarjeta, ficha o visita registrada)
-  const aiClaimsCreated =
-    /(?:he|hemos)\s+(?:generado|creado|registrado|abierto)\s+(?:ya\s+)?(?:la|una|tu|su)?\s*(?:tarjeta|ficha|visita|orden)/i.test(aiReply) ||
-    /(?:tarjeta|ficha)\s+(?:de\s+recepci[oó]n\s+)?(?:ha\s+sido\s+|queda\s+|est[aá]\s+)?(?:generada|creada|registrada)/i.test(aiReply) ||
-    /(?:queda|ha\s+quedado)\s+registrad[ao]/i.test(aiReply);
-
   const hasAiConfirmation =
     aiClaimsCreated ||
-    /(?:cita\s+(?:ha sido\s+)?agendada|cita\s+confirmada|cita\s+programada)/i.test(aiReply) ||
+    isAppointmentBookedNow ||
     /(?:tarjeta\s+de\s+recepci[oó]n|generado\s+la\s+tarjeta|creada\s+la\s+tarjeta|tarjeta\s+generada)/i.test(aiReply) ||
-    /(?:te\s+esperamos|le\s+esperamos)\s+en\s+el\s+taller/i.test(aiReply) ||
     (replyLower.includes('diagnóstico') && (replyLower.includes('50') || replyLower.includes('coste')) && hasRealProblem);
 
   const normal = hasChosenVehicle && (hasAiConfirmation || (hasRealProblem && !isAskingQuestion));

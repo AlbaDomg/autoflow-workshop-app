@@ -18,7 +18,7 @@ const turn = ({ history, text, aiReply, vehicleKnown = null }) => {
   const problem = extractDetectedProblem(aiReply, chatHistory, parsed, []);
   const candidate = vehicleKnown || (parsed.brand && (parsed.licensePlate || parsed.model)
     ? { brand: parsed.brand, model: parsed.model, licensePlate: parsed.licensePlate } : null);
-  const decision = decideCardCreation({ aiReply, detectedProblem: problem, candidateVehicle: candidate });
+  const decision = decideCardCreation({ text, aiReply, detectedProblem: problem, candidateVehicle: candidate, chatHistory });
   return { parsed, problem, decision };
 };
 
@@ -143,6 +143,19 @@ Pero puedo ofrecerte:
 const cleanedMsg = sanitizeCalendarProposalText(rawScreenshotMsg);
 check('oculta horas ocupadas (09:00 - 10:00 y 14:00 - 15:00)', !cleanedMsg.includes('ocupadas') && !cleanedMsg.includes('09:00 - 10:00'), cleanedMsg);
 check('mantiene horas libres de mañana y tarde', cleanedMsg.includes('08:00, 08:30, 10:30') && cleanedMsg.includes('13:00, 13:30, 15:30 o 16:00'), cleanedMsg);
+
+console.log('\n[14] Coche ya reparado / presupuestado: "genial pasare mañana" NO vuelve a crear tarjeta en Recepción');
+r = turn({
+  history: [
+    { sender: 'client', text: 'pues algo esta mal con el embrague' },
+    { sender: 'ai', text: 'He generado la tarjeta de recepción para tu Audi Q5.' },
+    { sender: 'workshop', text: '¡Hola, Alba! Tu Audi Q5 ya está listo para ser retirado. El importe total es de 363.00€.' }
+  ],
+  text: 'genial pasare mañana',
+  aiReply: 'Perfecto, te esperamos mañana. Si necesitas algo más, no dudes en decírmelo. ¡Hasta pronto!',
+  vehicleKnown: q5
+});
+check('NO vuelve a crear tarjeta en Recepción', !r.decision.create);
 
 console.log(`\nResultado: ${pass} OK, ${fail} fallos`);
 process.exit(fail ? 1 : 0);

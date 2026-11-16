@@ -1017,7 +1017,23 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
             }
 
             // 5. Decisión de crear/actualizar tarjeta (con red de seguridad si la IA afirma haberla creado)
-            const cardDecision = decideCardCreation({ aiReply, detectedProblem, candidateVehicle });
+            const plateToCheckStage = candidateVehicle?.licensePlate || activeVehicle?.licensePlate || selectedVehicle?.licensePlate || '';
+            const orderInActiveWorkshopStage = Boolean(
+              (targetOrder && targetOrder.id !== 'ORD-NUEVA-RECEPCION' && targetOrder.status && targetOrder.status !== 'recepcion') ||
+              (plateToCheckStage && orders.some(o =>
+                o.status && o.status !== 'recepcion' && o.status !== 'entregado' &&
+                o.vehicle?.licensePlate &&
+                o.vehicle.licensePlate.toLowerCase() === plateToCheckStage.toLowerCase()
+              ))
+            );
+            const cardDecision = decideCardCreation({
+              text,
+              aiReply,
+              detectedProblem,
+              candidateVehicle,
+              chatHistory,
+              orderInActiveWorkshopStage
+            });
             const isConfirmedCreation = cardDecision.create;
             if (cardDecision.viaSafetyNet) {
               addToast('🛟 La IA confirmó la tarjeta pero faltaban datos del vehículo: se ha creado igualmente. Revísala en Recepción.', 'warning');
