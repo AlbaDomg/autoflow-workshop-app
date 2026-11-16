@@ -1,4 +1,4 @@
-﻿import fs from 'fs';
+import fs from 'fs';
 import path from 'path';
 
 const TMP_CLIENTS_FILE = path.join('/tmp', 'clients-db.json');
@@ -11,8 +11,10 @@ export function getDbUrl() {
   return (
     process.env.DATABASE_URL ||
     process.env.POSTGRES_URL ||
-    process.env.NEON_DATABASE_URL ||
+    process.env.STORAGE_DATABASE_URL ||
+    process.env.STORAGE_POSTGRES_URL ||
     process.env.STORAGE_URL ||
+    process.env.NEON_DATABASE_URL ||
     ''
   ).trim();
 }
