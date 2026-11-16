@@ -1243,33 +1243,42 @@ export const WorkshopProvider = ({ children }) => {
     }
 
     // Instrucción contextual dinámica para el Agente IA de n8n
-    let aiSystemInstruction = '';
+    let clientContextInstruction = '';
     if (isExistingClient) {
       if (activeVehicle) {
-        aiSystemInstruction = `CLIENTE YA IDENTIFICADO: ${matchedClient.fullName} (DNI/NIF: ${matchedClient.dniNif}, Teléfono: ${matchedClient.phone}, Email: ${matchedClient.email}, Dirección: ${matchedClient.address}). VEHÍCULO SELECCIONADO PARA LA CITA: ${activeVehicle.brand} ${activeVehicle.model} (Matrícula: ${activeVehicle.licensePlate}, VIN: ${activeVehicle.vin}, Km: ${activeVehicle.mileage}).
+        clientContextInstruction = `CLIENTE YA IDENTIFICADO: ${matchedClient.fullName} (DNI/NIF: ${matchedClient.dniNif}, Teléfono: ${matchedClient.phone}, Email: ${matchedClient.email}, Dirección: ${matchedClient.address}). VEHÍCULO SELECCIONADO PARA LA CITA: ${activeVehicle.brand} ${activeVehicle.model} (Matrícula: ${activeVehicle.licensePlate}, VIN: ${activeVehicle.vin}, Km: ${activeVehicle.mileage}).
 REGLAS ESTRICTAS DE INTERACCIÓN:
 1. Este cliente YA ESTÁ IDENTIFICADO y su DNI (${matchedClient.dniNif}) y teléfono (${matchedClient.phone}) ya constan en su ficha técnica y en este mensaje. TIENES TERMINANTEMENTE PROHIBIDO VOLVER A PEDIR SU DNI, NIF, TELÉFONO O CONFIRMAR DATOS PERSONALES.
-2. Si el cliente indica el motivo de la avería o revisión, genera INMEDIATAMENTE la tarjeta de recepción usando su teléfono registrado (${matchedClient.phone}). Sus kilómetros ya están registrados (${activeVehicle.mileage || 55000} km), así que NO le vuelvas a pedir el kilometraje ni datos que ya constan en su ficha.
-3. REGLA CRÍTICA DE GOOGLE CALENDAR Y HORARIO (LUNES A VIERNES DE 08:00 A 16:00, CITAS DE 30 MINUTOS):
-   - Cada cita dura 30 MINUTOS. Tramos de mañana: [08:00, 08:30, 09:00, 09:30, 10:00, 10:30, 11:00, 11:30, 12:00, 12:30]. Tramos de mediodía/tarde (hasta el cierre a las 16:00): [13:00, 13:30, 14:00, 14:30, 15:00, 15:30, 16:00]. Al crear el evento en Google Calendar, pon siempre la hora de fin (End) 30 minutos después de la hora de inicio (Start).
-   - Los eventos que devuelve Consultar_Citas_Calendar son HORAS YA OCUPADAS por otros clientes. Descártalas EN SILENCIO (jamás digas qué citas hay agendadas salvo que el cliente pida esa hora exacta).
-   - ¡PROHIBIDO DAR HORAS SIN DECIR EL DÍA!: Siempre que propongas tramos horarios, DEBES indicar explícitamente a qué día de la semana y fecha corresponden (ej.: "Para mañana martes 17 de noviembre tengo libre a las 10:00, 12:30 o 15:00") y ofrecer horas repartidas entre mañana y tarde, no solo las 08:00 y 08:30. Si el cliente pregunta "¿y por la tarde?", ofrécele TODOS los tramos libres que queden entre las 13:00 y las 16:00.
-   - TIENES TERMINANTEMENTE PROHIBIDO ofrecer o agendar citas después de las 16:00 (17:00, 18:00, 19:00 están fuera de horario) ni en sábado o domingo.`;
+2. Si el cliente indica el motivo de la avería o revisión, genera INMEDIATAMENTE la tarjeta de recepción usando su teléfono registrado (${matchedClient.phone}). Sus kilómetros ya están registrados (${activeVehicle.mileage || 55000} km), así que NO le vuelvas a pedir el kilometraje ni datos que ya constan en su ficha.`;
       } else if (hasMultipleVehicles) {
         const vehiclesList = clientVehicles.map((v, i) => `${i + 1}) ${v.brand} ${v.model} (matrícula: ${v.licensePlate})`).join(', ');
-        aiSystemInstruction = `CLIENTE YA IDENTIFICADO: ${matchedClient.fullName} (DNI/NIF: ${matchedClient.dniNif}, Teléfono: ${matchedClient.phone}). ATENCIÓN: Este cliente tiene ${clientVehicles.length} VEHÍCULOS vinculados a su ficha técnica: ${vehiclesList}. INSTRUCCIÓN OBLIGATORIA: Salúdale cordialmente por su nombre y pregúntale de forma clara y directa con cuál de sus vehículos tiene la avería o cuál desea traer al taller (${vehiclesList}) antes de pedir fecha o agendar la cita. NO le vuelvas a pedir su DNI, teléfono ni datos personales porque ya constan en su ficha técnica.`;
+        clientContextInstruction = `CLIENTE YA IDENTIFICADO: ${matchedClient.fullName} (DNI/NIF: ${matchedClient.dniNif}, Teléfono: ${matchedClient.phone}). ATENCIÓN: Este cliente tiene ${clientVehicles.length} VEHÍCULOS vinculados a su ficha técnica: ${vehiclesList}. INSTRUCCIÓN OBLIGATORIA: Salúdale cordialmente por su nombre y pregúntale de forma clara y directa con cuál de sus vehículos tiene la avería o cuál desea traer al taller (${vehiclesList}) antes de pedir fecha o agendar la cita. NO le vuelvas a pedir su DNI, teléfono ni datos personales porque ya constan en su ficha técnica.`;
       } else {
         const singleVeh = clientVehicles[0] || selectedVehicle;
-        aiSystemInstruction = `CLIENTE YA IDENTIFICADO EN LA BASE DE DATOS DE TALLERES NARANJO: Nombre: ${matchedClient.fullName}, DNI/NIF: ${matchedClient.dniNif}, Teléfono: ${matchedClient.phone}, Email: ${matchedClient.email}, Dirección: ${matchedClient.address}. Vehículo vinculado: ${singleVeh.brand} ${singleVeh.model} (Matrícula: ${singleVeh.licensePlate}, VIN: ${singleVeh.vin}, Km: ${singleVeh.mileage}). IMPORTANTE: Trátale cordialmente por su nombre (${matchedClient.fullName}) y confirma amablemente si la cita es para este vehículo. NO vuelvas a pedirle su DNI, dirección ni teléfono ya que constan en su ficha técnica.`;
+        clientContextInstruction = `CLIENTE YA IDENTIFICADO EN LA BASE DE DATOS DE TALLERES NARANJO: Nombre: ${matchedClient.fullName}, DNI/NIF: ${matchedClient.dniNif}, Teléfono: ${matchedClient.phone}, Email: ${matchedClient.email}, Dirección: ${matchedClient.address}. Vehículo vinculado: ${singleVeh.brand} ${singleVeh.model} (Matrícula: ${singleVeh.licensePlate}, VIN: ${singleVeh.vin}, Km: ${singleVeh.mileage}). IMPORTANTE: Trátale cordialmente por su nombre (${matchedClient.fullName}) y confirma amablemente si la cita es para este vehículo. NO vuelvas a pedirle su DNI, dirección ni teléfono ya que constan en su ficha técnica.`;
       }
     } else {
-      aiSystemInstruction = activeDni
+      clientContextInstruction = activeDni
         ? `CLIENTE NUEVO CON DNI FACILITADO (${activeDni}): El cliente ha facilitado su DNI/NIF (${activeDni}) pero aún no existe en la base de datos de Talleres Naranjo. Pídele amablemente todos sus datos obligatorios para crear su ficha técnica oficial: DNI/NIF (confirma el ${activeDni}), Nombre completo, Teléfono con prefijo, Correo, Dirección postal, Marca, Modelo, Matrícula, VIN, Kilómetros y Motivo de la visita. ¡REGLA OBLIGATORIA!: Al llamar a la herramienta para crear la ficha del cliente o tarjeta de recepción, DEBES USAR OBLIGATORIAMENTE este DNI (${activeDni}) y no dejar el campo DNI vacío ni usar un valor temporal.`
         : 'CLIENTE NO IDENTIFICADO AÚN: Para comprobar si ya tiene ficha en Talleres Naranjo, solicita amablemente su número de DNI o NIF para consultar su historial en la base de datos (mediante /api/clients/search?dni=...). Si tras buscar por DNI no figura en el sistema, pídele amablemente todos sus datos obligatorios: DNI o NIF, Nombre completo, teléfono con prefijo, email, dirección, marca, modelo, matrícula, VIN, km y motivo para registrarlo.';
     }
 
-    // Regla universal de zona horaria de España (+01:00) para Google Calendar (evita el desfase de +1 hora por sufijo Z/UTC)
-    aiSystemInstruction += `\nREGLA OBLIGATORIA DE ZONA HORARIA EN GOOGLE CALENDAR: Al agendar citas en Google Calendar, los parámetros startTime y endTime DEBEN llevar siempre el sufijo de zona horaria de España "+01:00" (por ejemplo, si el cliente pide a las 11:30 del 17 de noviembre, envía exactamente "2026-11-17T11:30:00+01:00" como inicio y "2026-11-17T12:00:00+01:00" como fin). ¡PROHIBIDO terminar la fecha en "Z" (UTC), porque suma 1 hora de error!`;
+    // Regla universal obligatoria de Google Calendar, consulta previa de disponibilidad y prohibición de doble reserva para TODOS los clientes
+    const universalCalendarRules = `
+REGLA CRÍTICA UNIVERSAL DE CITAS Y GOOGLE CALENDAR (LUNES A VIERNES DE 08:00 A 16:00, CITAS DE 30 MINUTOS):
+1. COMPROBACIÓN PREVIA OBLIGATORIA (CERO SOLAPAMIENTOS): Antes de proponer huecos o confirmar CUALQUIER cita, DEBES llamar SIEMPRE a la herramienta Consultar_Citas_Calendar para la fecha que solicita el cliente. Todos los eventos devueltos por la herramienta son HORAS YA OCUPADAS en el taller.
+2. ¡PROHIBICIÓN TERMINANTE DE CITAS DUPLICADAS / HORAS OCUPADAS (ANTI-DOBLE RESERVA)!:
+   - Si el cliente solicita una hora que coincide con un evento ya existente (por ejemplo, pide a las 10:00 y en Google Calendar ya figura una cita a las 10:00), TIENES TERMINANTEMENTE PROHIBIDO llamar a la herramienta de agendar o crear el evento en Calendar y TIENES TERMINANTEMENTE PROHIBIDO confirmarle esa hora al cliente.
+   - Si la hora solicitada está ocupada, DEBES responder obligatoria, clara y educadamente:
+     "Lo siento, a las [hora] ya tenemos una cita agendada en el taller. Para ese día ([fecha]) tengo disponibles los siguientes huecos libres: [listar huecos realmente libres más cercanos]".
+3. ¡PROHIBIDO DAR HORAS SIN DECIR EL DÍA Y FECHA!: Siempre que propongas tramos horarios, DEBES indicar explícitamente a qué día de la semana y fecha corresponden (ej.: "Para el viernes 27 de noviembre tengo libre a las 10:30, 11:30 o 14:00") y ofrecer horas repartidas entre mañana y tarde. Si el cliente pregunta "¿y por la tarde?", ofrécele TODOS los tramos libres que queden entre las 13:00 y las 16:00.
+4. TRAMOS Y DURACIÓN DE CADA CITA:
+   - Cada cita dura exactamente 30 MINUTOS. Tramos de mañana: [08:00, 08:30, 09:00, 09:30, 10:00, 10:30, 11:00, 11:30, 12:00, 12:30]. Tramos de mediodía/tarde: [13:00, 13:30, 14:00, 14:30, 15:00, 15:30, 16:00].
+   - Al crear el evento en Google Calendar, pon siempre la hora de fin (End) 30 minutos después de la hora de inicio (Start).
+   - HORARIO LÍMITE: Cierre estricto a las 16:00. Prohibidas citas después de las 16:00 (17:00, 18:00, etc. están fuera de horario) ni en sábados o domingos.
+5. REGLA OBLIGATORIA DE ZONA HORARIA EN GOOGLE CALENDAR: Al agendar citas en Google Calendar, los parámetros startTime y endTime DEBEN llevar siempre el sufijo de zona horaria de España "+01:00" (por ejemplo, si la cita es a las 10:30 del 27 de noviembre, envía exactamente "2026-11-27T10:30:00+01:00" como inicio y "2026-11-27T11:00:00+01:00" como fin). ¡PROHIBIDO terminar la fecha en "Z" (UTC), porque suma 1 hora de error!`;
+
+    const aiSystemInstruction = `${clientContextInstruction}\n${universalCalendarRules}`;
 
     // Disparar al Webhook de n8n (para que el flujo de n8n + IA responda automáticamente)
     const chatHistory = [...(whatsappChats[targetOrder.id] || []), { sender: senderRole, text: text.trim() }];

@@ -133,6 +133,23 @@ export default async function handler(req, res) {
       body.sessionId = body.orderId ? `${body.orderId}-v2` : 's-dni-v2';
     }
 
+    const universalCalendarInstruction = `
+REGLA CRÍTICA UNIVERSAL DE CITAS Y GOOGLE CALENDAR (LUNES A VIERNES DE 08:00 A 16:00, CITAS DE 30 MINUTOS):
+1. COMPROBACIÓN PREVIA OBLIGATORIA (CERO SOLAPAMIENTOS): Antes de proponer huecos o confirmar CUALQUIER cita, DEBES llamar SIEMPRE a la herramienta Consultar_Citas_Calendar para la fecha solicitada. Todos los eventos devueltos son HORAS YA OCUPADAS en el taller.
+2. ¡PROHIBICIÓN TERMINANTE DE CITAS DUPLICADAS / HORAS OCUPADAS (ANTI-DOBLE RESERVA)!:
+   - Si el cliente solicita una hora que coincide con un evento ya existente (por ejemplo, pide a las 10:00 y en Google Calendar ya figura una cita a las 10:00), TIENES TERMINANTEMENTE PROHIBIDO llamar a la herramienta de agendar o crear la cita en Calendar y TIENES TERMINANTEMENTE PROHIBIDO confirmarle esa hora al cliente.
+   - Si la hora solicitada está ocupada, DEBES responder obligatoria, tajante y educadamente:
+     "Lo siento, a las [hora] ya tenemos una cita agendada en el taller. Para ese día ([fecha]) tengo disponibles los siguientes huecos libres: [listar huecos realmente libres más cercanos]".
+3. ¡PROHIBIDO DAR HORAS SIN DECIR EL DÍA Y FECHA!: Siempre que propongas horarios, indica explícitamente a qué día y fecha corresponden.
+4. Citas cada 30 min (08:00 a 16:00). Prohibido agendar después de las 16:00 o fines de semana.
+5. Zona horaria obligatoria de España "+01:00" en startTime y endTime.`;
+
+    if (!body.aiSystemInstruction) {
+      body.aiSystemInstruction = universalCalendarInstruction;
+    } else if (!body.aiSystemInstruction.includes('ANTI-DOBLE RESERVA')) {
+      body.aiSystemInstruction = `${body.aiSystemInstruction}\n${universalCalendarInstruction}`;
+    }
+
     const headers = { 
       'Content-Type': 'application/json',
       'Bypass-Tunnel-Reminder': 'true',
