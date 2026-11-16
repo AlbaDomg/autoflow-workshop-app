@@ -30,6 +30,38 @@ export default function KanbanBoard() {
   // WhatsApp Alert Simulation local message
   const [waMessage, setWaMessage] = useState('');
 
+  // Estados para plegar/desplegar columnas del Kanban y buscador por apartado
+  const [collapsedCols, setCollapsedCols] = useState({});
+  const [colSearch, setColSearch] = useState({
+    recepcion: '',
+    pendiente: '',
+    en_proceso: '',
+    reparado: '',
+    a_entregar: ''
+  });
+
+  const toggleColumn = (colKey) => {
+    setCollapsedCols(prev => ({ ...prev, [colKey]: !prev[colKey] }));
+  };
+
+  const handleColSearch = (colKey, val) => {
+    setColSearch(prev => ({ ...prev, [colKey]: val }));
+  };
+
+  const filterColOrders = (list, colKey) => {
+    const q = (colSearch[colKey] || '').toLowerCase().trim();
+    if (!q) return list;
+    return list.filter(o =>
+      (o.client?.fullName || '').toLowerCase().includes(q) ||
+      (o.client?.dniNif || '').toLowerCase().includes(q) ||
+      (o.vehicle?.brand || '').toLowerCase().includes(q) ||
+      (o.vehicle?.model || '').toLowerCase().includes(q) ||
+      (o.vehicle?.licensePlate || '').toLowerCase().includes(q) ||
+      `${o.vehicle?.brand || ''} ${o.vehicle?.model || ''}`.toLowerCase().includes(q) ||
+      (o.id || '').toLowerCase().includes(q)
+    );
+  };
+
   const openDiagnosisModal = (order) => {
     setSelectedOrder(order);
     setDiagnosisText(order.diagnosisText || '');
@@ -115,13 +147,25 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
       <div className="kanban-grid">
         
         {/* COLUMNA 1: RECEPCIÓN */}
-        <div className="kanban-column col-recepcion">
-          <div className="kanban-header">
+        <div className={`kanban-column col-recepcion ${collapsedCols.recepcion ? 'collapsed' : ''}`}>
+          <div className="kanban-header" onClick={() => toggleColumn('recepcion')} style={{ cursor: 'pointer', userSelect: 'none' }} title="Clic para desplegar o plegar sección">
             <h4 className="kanban-column-title">📥 Recepción</h4>
-            <span className="kanban-count">{ordersByStatus.recepcion.length}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <span className="kanban-count">{ordersByStatus.recepcion.length}</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{collapsedCols.recepcion ? '▼' : '▲'}</span>
+            </div>
           </div>
-          <div className="kanban-cards">
-            {ordersByStatus.recepcion.map(order => (
+          {!collapsedCols.recepcion && (
+            <>
+              <input
+                type="text"
+                className="form-control kanban-col-search"
+                placeholder="🔍 Buscar cliente o vehículo..."
+                value={colSearch.recepcion}
+                onChange={(e) => handleColSearch('recepcion', e.target.value)}
+              />
+              <div className="kanban-cards">
+                {filterColOrders(ordersByStatus.recepcion, 'recepcion').map(order => (
               <div key={order.id} className="kanban-card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
@@ -145,7 +189,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                         cursor: 'pointer'
                       }}
                     >
-                      💬 WA
+                      💬
                     </button>
                     <button
                       type="button"
@@ -197,46 +241,33 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                     🔍 Realizar Diagnóstico
                   </button>
                 )}
-
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  style={{
-                    fontSize: '0.72rem',
-                    padding: '0.35rem 0.5rem',
-                    borderColor: 'rgba(239, 68, 68, 0.35)',
-                    color: '#ef4444',
-                    background: 'rgba(239, 68, 68, 0.06)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.35rem',
-                    marginTop: '0.35rem',
-                    width: '100%',
-                    cursor: 'pointer'
-                  }}
-                  onClick={() => {
-                    if (window.confirm(`¿Estás seguro de que deseas descartar/eliminar la tarjeta de recepción de ${order.vehicle.brand} ${order.vehicle.model} (${order.vehicle.licensePlate})?`)) {
-                      deleteOrder(order.id);
-                    }
-                  }}
-                  title="Descartar y eliminar tarjeta de recepción"
-                >
-                  🗑️ Descartar Tarjeta
-                </button>
               </div>
             ))}
-          </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* COLUMNA 2: PENDIENTES DE REPARACIÓN */}
-        <div className="kanban-column col-pendiente">
-          <div className="kanban-header">
+        <div className={`kanban-column col-pendiente ${collapsedCols.pendiente ? 'collapsed' : ''}`}>
+          <div className="kanban-header" onClick={() => toggleColumn('pendiente')} style={{ cursor: 'pointer', userSelect: 'none' }} title="Clic para desplegar o plegar sección">
             <h4 className="kanban-column-title">⏳ Pendientes</h4>
-            <span className="kanban-count">{ordersByStatus.pendiente.length}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <span className="kanban-count">{ordersByStatus.pendiente.length}</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{collapsedCols.pendiente ? '▼' : '▲'}</span>
+            </div>
           </div>
-          <div className="kanban-cards">
-            {ordersByStatus.pendiente.map(order => (
+          {!collapsedCols.pendiente && (
+            <>
+              <input
+                type="text"
+                className="form-control kanban-col-search"
+                placeholder="🔍 Buscar cliente o vehículo..."
+                value={colSearch.pendiente}
+                onChange={(e) => handleColSearch('pendiente', e.target.value)}
+              />
+              <div className="kanban-cards">
+                {filterColOrders(ordersByStatus.pendiente, 'pendiente').map(order => (
               <div key={order.id} className="kanban-card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
@@ -259,7 +290,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                       cursor: 'pointer'
                     }}
                   >
-                    💬 WA
+                    💬
                   </button>
                 </div>
                 
@@ -302,17 +333,31 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                 )}
               </div>
             ))}
-          </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* COLUMNA 3: EN PROCESO */}
-        <div className="kanban-column col-en_proceso">
-          <div className="kanban-header">
+        <div className={`kanban-column col-en_proceso ${collapsedCols.en_proceso ? 'collapsed' : ''}`}>
+          <div className="kanban-header" onClick={() => toggleColumn('en_proceso')} style={{ cursor: 'pointer', userSelect: 'none' }} title="Clic para desplegar o plegar sección">
             <h4 className="kanban-column-title">🔧 En Proceso</h4>
-            <span className="kanban-count">{ordersByStatus.en_proceso.length}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <span className="kanban-count">{ordersByStatus.en_proceso.length}</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{collapsedCols.en_proceso ? '▼' : '▲'}</span>
+            </div>
           </div>
-          <div className="kanban-cards">
-            {ordersByStatus.en_proceso.map(order => (
+          {!collapsedCols.en_proceso && (
+            <>
+              <input
+                type="text"
+                className="form-control kanban-col-search"
+                placeholder="🔍 Buscar cliente o vehículo..."
+                value={colSearch.en_proceso}
+                onChange={(e) => handleColSearch('en_proceso', e.target.value)}
+              />
+              <div className="kanban-cards">
+                {filterColOrders(ordersByStatus.en_proceso, 'en_proceso').map(order => (
               <div key={order.id} className="kanban-card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
@@ -335,7 +380,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                       cursor: 'pointer'
                     }}
                   >
-                    💬 WA
+                    💬
                   </button>
                 </div>
 
@@ -360,17 +405,31 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                 </div>
               </div>
             ))}
-          </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* COLUMNA 4: REPARADOS */}
-        <div className="kanban-column col-reparado">
-          <div className="kanban-header">
+        <div className={`kanban-column col-reparado ${collapsedCols.reparado ? 'collapsed' : ''}`}>
+          <div className="kanban-header" onClick={() => toggleColumn('reparado')} style={{ cursor: 'pointer', userSelect: 'none' }} title="Clic para desplegar o plegar sección">
             <h4 className="kanban-column-title">🚗 Reparados</h4>
-            <span className="kanban-count">{ordersByStatus.reparado.length}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <span className="kanban-count">{ordersByStatus.reparado.length}</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{collapsedCols.reparado ? '▼' : '▲'}</span>
+            </div>
           </div>
-          <div className="kanban-cards">
-            {ordersByStatus.reparado.map(order => (
+          {!collapsedCols.reparado && (
+            <>
+              <input
+                type="text"
+                className="form-control kanban-col-search"
+                placeholder="🔍 Buscar cliente o vehículo..."
+                value={colSearch.reparado}
+                onChange={(e) => handleColSearch('reparado', e.target.value)}
+              />
+              <div className="kanban-cards">
+                {filterColOrders(ordersByStatus.reparado, 'reparado').map(order => (
               <div key={order.id} className="kanban-card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
@@ -393,7 +452,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                       cursor: 'pointer'
                     }}
                   >
-                    💬 WA
+                    💬
                   </button>
                 </div>
 
@@ -421,17 +480,31 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                 </button>
               </div>
             ))}
-          </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* COLUMNA 5: A ENTREGAR */}
-        <div className="kanban-column col-a_entregar">
-          <div className="kanban-header">
+        <div className={`kanban-column col-a_entregar ${collapsedCols.a_entregar ? 'collapsed' : ''}`}>
+          <div className="kanban-header" onClick={() => toggleColumn('a_entregar')} style={{ cursor: 'pointer', userSelect: 'none' }} title="Clic para desplegar o plegar sección">
             <h4 className="kanban-column-title">📦 A Entregar</h4>
-            <span className="kanban-count">{ordersByStatus.a_entregar.length}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <span className="kanban-count">{ordersByStatus.a_entregar.length}</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{collapsedCols.a_entregar ? '▼' : '▲'}</span>
+            </div>
           </div>
-          <div className="kanban-cards">
-            {ordersByStatus.a_entregar.map(order => (
+          {!collapsedCols.a_entregar && (
+            <>
+              <input
+                type="text"
+                className="form-control kanban-col-search"
+                placeholder="🔍 Buscar cliente o vehículo..."
+                value={colSearch.a_entregar}
+                onChange={(e) => handleColSearch('a_entregar', e.target.value)}
+              />
+              <div className="kanban-cards">
+                {filterColOrders(ordersByStatus.a_entregar, 'a_entregar').map(order => (
               <div key={order.id} className="kanban-card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
@@ -454,7 +527,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                       cursor: 'pointer'
                     }}
                   >
-                    💬 WA
+                    💬
                   </button>
                 </div>
 
@@ -474,7 +547,9 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                 </button>
               </div>
             ))}
-          </div>
+              </div>
+            </>
+          )}
         </div>
 
       </div>

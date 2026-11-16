@@ -42,14 +42,29 @@ export default function ClientDirectory() {
   const [vehMileage, setVehMileage] = useState('');
   const [vehError, setVehError] = useState('');
 
-  // Filter clients
+  // Estados para plegar/desplegar historial de visitas y documentos firmados por vehículo
+  const [isVisitsExpanded, setIsVisitsExpanded] = useState(false);
+  const [expandedVehicleDocs, setExpandedVehicleDocs] = useState({});
+
+  const toggleVehicleDocs = (plate) => {
+    setExpandedVehicleDocs(prev => ({ ...prev, [plate]: !prev[plate] }));
+  };
+
+  // Filter clients (por nombre, DNI, teléfono o vehículo/matrícula)
   const filteredClients = clients.filter(c => {
-    const search = searchTerm.toLowerCase();
-    return (
-      c.fullName.toLowerCase().includes(search) ||
-      c.dniNif.toLowerCase().includes(search) ||
-      c.phone.includes(search)
+    const search = searchTerm.toLowerCase().trim();
+    if (!search) return true;
+    const matchesClient =
+      (c.fullName || '').toLowerCase().includes(search) ||
+      (c.dniNif || '').toLowerCase().includes(search) ||
+      (c.phone || '').includes(search);
+    const matchesVehicle = Array.isArray(c.vehicles) && c.vehicles.some(v =>
+      (v.brand || '').toLowerCase().includes(search) ||
+      (v.model || '').toLowerCase().includes(search) ||
+      (v.licensePlate || '').toLowerCase().includes(search) ||
+      `${v.brand || ''} ${v.model || ''}`.toLowerCase().includes(search)
     );
+    return matchesClient || matchesVehicle;
   });
 
   const activeClient = clients.find(c => c.dniNif === selectedDni);
@@ -213,7 +228,7 @@ export default function ClientDirectory() {
           <input 
             type="text" 
             className="form-control" 
-            placeholder="🔍 Buscar por Nombre, NIF..." 
+            placeholder="🔍 Buscar cliente, NIF, coche o matrícula..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -368,10 +383,28 @@ export default function ClientDirectory() {
                       </div>
                       {vehicleSignedOrders.length > 0 && (
                         <div style={{ marginTop: '0.35rem', paddingTop: '0.35rem', borderTop: '1px dashed var(--border-glass)', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                          <span style={{ fontSize: '0.68rem', color: 'var(--color-primary)', fontWeight: 600 }}>
-                            📄 Documentos Oficiales Firmados ({vehicleSignedOrders.length}):
-                          </span>
-                          {vehicleSignedOrders.map(so => (
+                          <button
+                            type="button"
+                            onClick={() => toggleVehicleDocs(v.licensePlate)}
+                            style={{
+                              background: 'rgba(0, 242, 254, 0.08)',
+                              border: '1px solid rgba(0, 242, 254, 0.25)',
+                              borderRadius: '6px',
+                              padding: '0.3rem 0.5rem',
+                              fontSize: '0.68rem',
+                              color: 'var(--color-primary)',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              width: '100%'
+                            }}
+                          >
+                            <span>📄 Documentos Firmados ({vehicleSignedOrders.length})</span>
+                            <span>{expandedVehicleDocs[v.licensePlate] ? '▲' : '▼'}</span>
+                          </button>
+                          {expandedVehicleDocs[v.licensePlate] && vehicleSignedOrders.map(so => (
                             <button
                               key={so.id}
                               type="button"
@@ -395,9 +428,33 @@ export default function ClientDirectory() {
               </div>
             </div>
 
-            {/* LÍNEA DE TIEMPO DE VISITAS */}
+            {/* LÍNEA DE TIEMPO DE VISITAS (PLEGABLE / DESPLEGABLE) */}
             <div>
-              <h4 className="section-small-title" style={{ marginBottom: '0.75rem' }}>📅 Historial de Visitas al Taller ({clientVisits.length})</h4>
+              <button
+                type="button"
+                onClick={() => setIsVisitsExpanded(prev => !prev)}
+                style={{
+                  width: '100%',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid var(--border-glass)',
+                  borderRadius: '8px',
+                  padding: '0.65rem 0.9rem',
+                  marginBottom: isVisitsExpanded ? '0.75rem' : 0,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  cursor: 'pointer',
+                  color: 'var(--text-primary)'
+                }}
+              >
+                <span className="section-small-title" style={{ margin: 0 }}>
+                  📅 Historial de Visitas al Taller ({clientVisits.length})
+                </span>
+                <span style={{ fontSize: '0.78rem', color: 'var(--color-primary)', fontWeight: 600 }}>
+                  {isVisitsExpanded ? '▲ Ocultar' : '▼ Desplegar'}
+                </span>
+              </button>
+              {isVisitsExpanded && (
               <div className="reminder-list">
                 {clientVisits.length > 0 ? (
                   clientVisits.map(visit => {
@@ -508,6 +565,7 @@ export default function ClientDirectory() {
                   </div>
                 )}
               </div>
+              )}
             </div>
           </div>
         ) : (
