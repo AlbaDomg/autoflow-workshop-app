@@ -12,6 +12,8 @@ export const isCourtesyText = (t) => {
   if (/^(pasado mañana|mañana|hoy|el (lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)|a las \d+|el \d{1,2}\b|\d{1,2}[/:]\d{1,2})/i.test(clean)) return true;
   // Peticiones de cambio/cancelación de cita o llamada (no son averías mecánicas)
   if (/(?:cambiar|cambio|cancelar|anular|mover|posponer|modificar)\s+(?:la\s+|mi\s+|de\s+)?(?:cita|hora|d[ií]a)|no\s+(?:voy\s+a\s+poder|puedo)\s+(?:ir|acudir|asistir)/i.test(clean)) return true;
+  // Frases introductorias genéricas donde aún no se ha dicho qué avería tiene ("tengo un problema con mi coche", "el audi porfa")
+  if (/^(tengo\s+un\s+problema(\s+con\s+(mi|el)\s+(coche|veh[ií]culo|auto))?|mi\s+coche\s+tiene\s+un\s+problema|quiero\s+(traer|llevar|revisar|arreglar)\s+(mi|el)\s+coche|(el|con\s+el|para\s+el)\s+[a-z0-9\s]+(\s+porfa|\s+por\s+favor)?)\s*[.!¡?]*$/i.test(clean)) return true;
   return false;
 };
 
@@ -29,7 +31,7 @@ export const isAutomotiveIssue = (t) => {
     'pintura', 'golpe', 'abollad', 'mantenimiento', 'diagn', 'filtro',
     'correa', 'distribuc', 'suspens', 'amortigua', 'direcci', 'escape',
     'cataliz', 'clima', 'aire', 'fuga', 'líquid', 'liquid', 'anticongel',
-    'vibr', 'potencia', 'aceler', 'cambio', 'marcha', 'problema', 'coche',
+    'vibr', 'potencia', 'aceler', 'cambio', 'marcha',
     'cristal', 'luna', 'parabrisas', 'espejo', 'puerta',
     'alternador', 'turbo', 'inyect', 'bujía', 'bujia', 'radiador', 'frena', 'falla',
     'funciona', 'funcionando', 'pierde', 'gotea', 'huele', 'tiembla', 'suena'
@@ -236,6 +238,8 @@ export const extractDetectedProblem = (aiReply = '', chatHistory = [], parsed = 
   let detected = '';
   const tryAi = (text) => {
     const pats = [
+      // Estructura oficial: "He generado la tarjeta de recepción para tu [Coche] (Matrícula: [X]) por *[motivo]*."
+      /\)\s*por\s+\*?([^*.\n,!]+)\*?/i,
       /(?:para\s+el\s+|para\s+la\s+|el\s+)(diagn[oó]stico\s+de\s+[^*.\n,]+)/i,
       /(?:por\s+el\s+|por\s+|para\s+el\s+)(fallo\s+de\s+[^*.\n,]+)/i,
       /(?:para\s+la\s+|para\s+el\s+)(revisi[oó]n\s+[^*.\n,]+)/i,
@@ -334,7 +338,7 @@ export const decideCardCreation = ({
     detectedProblem !== 'Revisión periódica y mantenimiento' &&
     detectedProblem !== 'Avería comunicada por el cliente por WhatsApp';
 
-  const isAskingQuestion = /(?:¿?con cu[aá]l de ellos|cu[eé]ntame el motivo|ind[ií]came el motivo|¿?qu[eé] d[ií]a|en qu[eé] puedo ayudarte|podr[ií]as proporcionarme|el taller se pondr[aá] en contacto)/i.test(aiReply);
+  const isAskingQuestion = /(?:¿?con cu[aá]l de ellos|cu[aá]l es el motivo|cu[eé]ntame el motivo|ind[ií]came el motivo|¿?qu[eé] d[ií]a|en qu[eé] puedo ayudarte|podr[ií]as proporcionarme|qu[eé] problema tiene|qu[eé] le ocurre|el taller se pondr[aá] en contacto)/i.test(aiReply);
 
   const hasAiConfirmation =
     aiClaimsCreated ||
@@ -342,7 +346,8 @@ export const decideCardCreation = ({
     /(?:tarjeta\s+de\s+recepci[oó]n|generado\s+la\s+tarjeta|creada\s+la\s+tarjeta|tarjeta\s+generada)/i.test(aiReply) ||
     (replyLower.includes('diagnóstico') && (replyLower.includes('50') || replyLower.includes('coste')) && hasRealProblem);
 
-  const normal = hasChosenVehicle && (hasAiConfirmation || (hasRealProblem && !isAskingQuestion));
+  // REGLA DE ORO: Solo crear la tarjeta cuando la IA confirma su creación / diagnóstico / cita, NUNCA mientras está preguntando el motivo
+  const normal = hasChosenVehicle && hasAiConfirmation && !isAskingQuestion;
   const safetyNet = !normal && aiClaimsCreated;
 
   return { create: normal || safetyNet, viaSafetyNet: safetyNet, hasChosenVehicle, hasRealProblem, aiClaimsCreated };

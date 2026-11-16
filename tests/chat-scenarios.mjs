@@ -184,5 +184,35 @@ check('matrícula = 9876LMN', r.parsed.licensePlate === '9876LMN', r.parsed.lice
 check('VIN = VSSZZZ1K2V1234567', r.parsed.vin === 'VSSZZZ1K2V1234567', r.parsed.vin);
 check('kilometraje = 55000', r.parsed.mileage === 55000, r.parsed.mileage);
 
+console.log('\n[16] Flujo real móvil: "Tengo un problema con mi coche" -> "El audi porfa" (NO debe crear tarjeta hasta decir la avería real)');
+r = turn({
+  history: [
+    { sender: 'client', text: 'Hola' },
+    { sender: 'ai', text: '¡Hola! ¿En qué puedo ayudarte hoy?' },
+    { sender: 'client', text: 'Tengo un problema con mi coche' },
+    { sender: 'ai', text: 'Claro, ¿puedes decirme tu DNI?' },
+    { sender: 'client', text: '77154132B' },
+    { sender: 'ai', text: '¿Con cuál de ellos tienes la avería?' }
+  ],
+  text: 'El audi porfa',
+  aiReply: 'Genial, Alba. ¿Cuál es el motivo de tu visita con el Audi Q5?',
+  vehicleKnown: q5
+});
+check('NO crea tarjeta prematura cuando elige el coche y la IA pregunta el motivo', !r.decision.create);
+check('"Tengo un problema con mi coche" NO cuenta como avería mecánica', !isAutomotiveIssue('Tengo un problema con mi coche'));
+
+r = turn({
+  history: [
+    { sender: 'client', text: 'Tengo un problema con mi coche' },
+    { sender: 'client', text: 'El audi porfa' },
+    { sender: 'ai', text: 'Genial, Alba. ¿Cuál es el motivo de tu visita con el Audi Q5?' }
+  ],
+  text: 'No le funciona bien el freno',
+  aiReply: 'He generado la tarjeta de recepción para tu Audi Q5 (Matrícula: 8465MGZ) por fallo de frenos.',
+  vehicleKnown: q5
+});
+check('SÍ crea una única tarjeta cuando dice el fallo y la IA confirma', r.decision.create);
+check('extrae el motivo limpio procesado por la IA = "fallo de frenos"', r.problem.toLowerCase() === 'fallo de frenos', r.problem);
+
 console.log(`\nResultado: ${pass} OK, ${fail} fallos`);
 process.exit(fail ? 1 : 0);

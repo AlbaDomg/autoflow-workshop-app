@@ -74,10 +74,23 @@ export default async function handler(req, res) {
       }
     };
 
-    // Actualizar o añadir la orden
-    const existingIdx = orders.findIndex(o => o.id === orderId);
+    // Actualizar o añadir la orden (evitando duplicar tarjetas en Recepción para la misma matrícula)
+    let existingIdx = orders.findIndex(o => o.id === orderId);
+    if (existingIdx === -1 && order.status === 'recepcion' && plate && plate !== 'VEH') {
+      existingIdx = orders.findIndex(o =>
+        o.status === 'recepcion' &&
+        o.vehicle?.licensePlate &&
+        o.vehicle.licensePlate.toUpperCase() === plate
+      );
+    }
     if (existingIdx >= 0) {
-      orders[existingIdx] = { ...orders[existingIdx], ...order };
+      const existing = orders[existingIdx];
+      orders[existingIdx] = {
+        ...existing,
+        ...order,
+        id: existing.id,
+        portalToken: existing.portalToken || order.portalToken
+      };
     } else {
       orders.unshift(order);
     }

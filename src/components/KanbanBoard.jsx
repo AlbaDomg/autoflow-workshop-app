@@ -30,8 +30,19 @@ export default function KanbanBoard() {
   // WhatsApp Alert Simulation local message
   const [waMessage, setWaMessage] = useState('');
 
-  // Estados para plegar/desplegar columnas del Kanban y buscador por apartado
-  const [collapsedCols, setCollapsedCols] = useState({});
+  // Estados para plegar/desplegar columnas del Kanban (plegadas por defecto en móvil <= 768px) y buscador por apartado
+  const [collapsedCols, setCollapsedCols] = useState(() => {
+    if (typeof window !== 'undefined' && window.innerWidth <= 768) {
+      return {
+        recepcion: true,
+        pendiente: true,
+        en_proceso: true,
+        reparado: true,
+        a_entregar: true
+      };
+    }
+    return {};
+  });
   const [colSearch, setColSearch] = useState({
     recepcion: '',
     pendiente: '',

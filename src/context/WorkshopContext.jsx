@@ -153,7 +153,7 @@ const extractAiReply = (result) => {
 
 const ensureOrdersHaveTokens = (ordersList) => {
   if (!Array.isArray(ordersList)) return [];
-  return ordersList
+  const normalized = ordersList
     .filter(o => o && o?.client?.dniNif !== '48392019Z')
     .map(o => {
       let cleanProblem = o.problemDescription;
@@ -193,6 +193,30 @@ const ensureOrdersHaveTokens = (ordersList) => {
         }
       };
     });
+
+  // Deduplicar automáticamente tarjetas en 'recepcion' que compartan la misma matrícula
+  // (p. ej. si n8n y el navegador crearon dos IDs distintos al mismo tiempo), conservando siempre el motivo técnico más específico
+  const recepcionByPlate = new Map();
+  const deduplicated = [];
+  for (const ord of normalized) {
+    const plateKey = (ord.vehicle?.licensePlate || '').trim().toUpperCase();
+    if (ord.status === 'recepcion' && plateKey && plateKey !== 'VEH') {
+      if (!recepcionByPlate.has(plateKey)) {
+        recepcionByPlate.set(plateKey, ord);
+        deduplicated.push(ord);
+      } else {
+        const prevOrd = recepcionByPlate.get(plateKey);
+        const prevIsGeneric = !isAutomotiveIssue(prevOrd.problemDescription) || prevOrd.problemDescription === 'Diagnóstico y revisión en taller';
+        const currIsReal = isAutomotiveIssue(ord.problemDescription) && ord.problemDescription !== 'Diagnóstico y revisión en taller';
+        if (prevIsGeneric && currIsReal) {
+          prevOrd.problemDescription = ord.problemDescription;
+        }
+      }
+    } else {
+      deduplicated.push(ord);
+    }
+  }
+  return deduplicated;
 };
 
 const migrateClientsList = (clientsList) => {
