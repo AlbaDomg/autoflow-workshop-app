@@ -160,7 +160,13 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
         {/* COLUMNA 1: RECEPCIÓN */}
         <div className={`kanban-column col-recepcion ${collapsedCols.recepcion ? 'collapsed' : ''}`}>
           <div className="kanban-header" onClick={() => toggleColumn('recepcion')} style={{ cursor: 'pointer', userSelect: 'none' }} title="Clic para desplegar o plegar sección">
-            <h4 className="kanban-column-title">📥 Recepción</h4>
+            <h4 className="kanban-column-title" style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.9 }}>
+                <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+              </svg>
+              <span>Recepción</span>
+            </h4>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
               <span className="kanban-count">{ordersByStatus.recepcion.length}</span>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{collapsedCols.recepcion ? '▼' : '▲'}</span>
@@ -171,7 +177,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
               <input
                 type="text"
                 className="form-control kanban-col-search"
-                placeholder="🔍 Buscar cliente o vehículo..."
+                placeholder="Buscar cliente o vehículo..."
                 value={colSearch.recepcion}
                 onChange={(e) => handleColSearch('recepcion', e.target.value)}
               />
@@ -182,7 +188,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                   <div>
                     <div className="card-order-id">{order.id}</div>
                     <div className="card-vehicle-title">{order.vehicle.brand} {order.vehicle.model}</div>
-                    <div className="card-client-name">👤 {order.client.fullName}</div>
+                    <div className="card-client-name">{order.client.fullName}</div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                     <button
@@ -228,28 +234,28 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                 <div className="card-details">
                   <span>Matrícula: {order.vehicle.licensePlate}</span>
                   <span>Ingreso: {order.vehicle.entryDate}</span>
-                  <span style={{ color: 'var(--color-warning)', lineHeight: '1.35' }}>⚠️ {order.problemDescription}</span>
+                  <span style={{ color: 'var(--color-warning)', lineHeight: '1.35' }}>{order.problemDescription}</span>
                 </div>
                 
                 {order.diagnosisText ? (
                   <>
                     <button className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.4rem' }} onClick={() => openDiagnosisModal(order)}>
-                      ✏️ Editar Diagnóstico
+                      Editar Diagnóstico
                     </button>
                     <button className="btn" style={{ fontSize: '0.8rem', padding: '0.4rem' }} onClick={() => sendWhatsAppBudget(order)}>
-                      🟢 Enviar WA Presupuesto
+                      Enviar Presupuesto (WA)
                     </button>
                     <button
                       className="btn btn-secondary"
                       style={{ fontSize: '0.75rem', padding: '0.35rem', borderColor: 'rgba(0, 242, 254, 0.35)', color: 'var(--color-primary)' }}
                       onClick={() => window.open(getPortalUrl(order), '_blank')}
                     >
-                      🔗 Abrir Enlace Único Cliente
+                      Abrir Enlace de Firma
                     </button>
                   </>
                 ) : (
                   <button className="btn" style={{ fontSize: '0.8rem', padding: '0.4rem' }} onClick={() => openDiagnosisModal(order)}>
-                    🔍 Realizar Diagnóstico
+                    Realizar Diagnóstico
                   </button>
                 )}
               </div>
@@ -262,7 +268,13 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
         {/* COLUMNA 2: PENDIENTES DE REPARACIÓN */}
         <div className={`kanban-column col-pendiente ${collapsedCols.pendiente ? 'collapsed' : ''}`}>
           <div className="kanban-header" onClick={() => toggleColumn('pendiente')} style={{ cursor: 'pointer', userSelect: 'none' }} title="Clic para desplegar o plegar sección">
-            <h4 className="kanban-column-title">⏳ Pendientes</h4>
+            <h4 className="kanban-column-title" style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.9 }}>
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              <span>Pendientes</span>
+            </h4>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
               <span className="kanban-count">{ordersByStatus.pendiente.length}</span>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{collapsedCols.pendiente ? '▼' : '▲'}</span>
@@ -273,7 +285,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
               <input
                 type="text"
                 className="form-control kanban-col-search"
-                placeholder="🔍 Buscar cliente o vehículo..."
+                placeholder="Buscar cliente o vehículo..."
                 value={colSearch.pendiente}
                 onChange={(e) => handleColSearch('pendiente', e.target.value)}
               />
@@ -284,7 +296,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                   <div>
                     <div className="card-order-id">{order.id}</div>
                     <div className="card-vehicle-title">{order.vehicle.brand} {order.vehicle.model}</div>
-                    <div className="card-client-name">👤 {order.client.fullName}</div>
+                    <div className="card-client-name">{order.client.fullName}</div>
                   </div>
                   <button
                     type="button"
@@ -321,12 +333,12 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                   style={{ width: '100%', fontSize: '0.75rem', padding: '0.4rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem' }} 
                   onClick={() => openViewDiagnosisModal(order)}
                 >
-                  📝 Ver Diagnóstico
+                  Ver Diagnóstico
                 </button>
 
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <button className="btn btn-secondary" style={{ flex: 1, fontSize: '0.75rem', padding: '0.4rem' }} onClick={() => openMechanicsModal(order)}>
-                    👥 Asignar
+                    Asignar
                   </button>
                   <button 
                     className="btn" 
@@ -334,7 +346,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                     disabled={(order.assignedMechanics || []).length === 0}
                     onClick={() => startRepair(order.id)}
                   >
-                    🚀 Iniciar
+                    Iniciar Trabajo
                   </button>
                 </div>
                 {(order.assignedMechanics || []).length === 0 && (
@@ -352,7 +364,12 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
         {/* COLUMNA 3: EN PROCESO */}
         <div className={`kanban-column col-en_proceso ${collapsedCols.en_proceso ? 'collapsed' : ''}`}>
           <div className="kanban-header" onClick={() => toggleColumn('en_proceso')} style={{ cursor: 'pointer', userSelect: 'none' }} title="Clic para desplegar o plegar sección">
-            <h4 className="kanban-column-title">🔧 En Proceso</h4>
+            <h4 className="kanban-column-title" style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.9 }}>
+                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+              </svg>
+              <span>En Proceso</span>
+            </h4>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
               <span className="kanban-count">{ordersByStatus.en_proceso.length}</span>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{collapsedCols.en_proceso ? '▼' : '▲'}</span>
@@ -363,7 +380,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
               <input
                 type="text"
                 className="form-control kanban-col-search"
-                placeholder="🔍 Buscar cliente o vehículo..."
+                placeholder="Buscar cliente o vehículo..."
                 value={colSearch.en_proceso}
                 onChange={(e) => handleColSearch('en_proceso', e.target.value)}
               />
@@ -374,7 +391,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                   <div>
                     <div className="card-order-id">{order.id}</div>
                     <div className="card-vehicle-title">{order.vehicle.brand} {order.vehicle.model}</div>
-                    <div className="card-client-name">👤 {order.client.fullName}</div>
+                    <div className="card-client-name">{order.client.fullName}</div>
                   </div>
                   <button
                     type="button"
@@ -396,7 +413,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                 </div>
 
                 <div className="card-details">
-                  <span style={{ color: 'var(--color-secondary)', fontWeight: 600 }}>🛠️ Mecánicos Asignados:</span>
+                  <span style={{ color: 'var(--color-secondary)', fontWeight: 600 }}>Mecánicos Asignados:</span>
                   <div style={{ display: 'flex', gap: '0.25rem', margin: '0.25rem 0', flexWrap: 'wrap' }}>
                     {(order.assignedMechanics || []).map(id => (
                       <span key={id} style={{ background: 'rgba(127, 0, 255, 0.15)', border: '1px solid rgba(127, 0, 255, 0.3)', padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.7rem' }}>
@@ -408,10 +425,10 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                   <button className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.4rem' }} onClick={() => openViewDiagnosisModal(order)}>
-                    📝 Ver Diagnóstico
+                    Ver Diagnóstico
                   </button>
                   <button className="btn" style={{ fontSize: '0.8rem', padding: '0.4rem' }} onClick={() => completeRepair(order.id)}>
-                    ✅ Finalizar Trabajo
+                    Finalizar Trabajo
                   </button>
                 </div>
               </div>
@@ -424,7 +441,13 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
         {/* COLUMNA 4: REPARADOS */}
         <div className={`kanban-column col-reparado ${collapsedCols.reparado ? 'collapsed' : ''}`}>
           <div className="kanban-header" onClick={() => toggleColumn('reparado')} style={{ cursor: 'pointer', userSelect: 'none' }} title="Clic para desplegar o plegar sección">
-            <h4 className="kanban-column-title">🚗 Reparados</h4>
+            <h4 className="kanban-column-title" style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.9 }}>
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                <polyline points="22 4 12 14.01 9 11.01" />
+              </svg>
+              <span>Reparados</span>
+            </h4>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
               <span className="kanban-count">{ordersByStatus.reparado.length}</span>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{collapsedCols.reparado ? '▼' : '▲'}</span>
@@ -435,7 +458,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
               <input
                 type="text"
                 className="form-control kanban-col-search"
-                placeholder="🔍 Buscar cliente o vehículo..."
+                placeholder="Buscar cliente o vehículo..."
                 value={colSearch.reparado}
                 onChange={(e) => handleColSearch('reparado', e.target.value)}
               />
@@ -446,7 +469,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                   <div>
                     <div className="card-order-id">{order.id}</div>
                     <div className="card-vehicle-title">{order.vehicle.brand} {order.vehicle.model}</div>
-                    <div className="card-client-name">👤 {order.client.fullName}</div>
+                    <div className="card-client-name">{order.client.fullName}</div>
                   </div>
                   <button
                     type="button"
@@ -468,7 +491,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                 </div>
 
                 <div className="card-details">
-                  <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>👨‍🔧 Mecánico(s) Responsable(s):</span>
+                  <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>Mecánico(s) Responsable(s):</span>
                   <div style={{ display: 'flex', gap: '0.25rem', margin: '0.25rem 0', flexWrap: 'wrap' }}>
                     {(order.assignedMechanics || []).length > 0 ? (
                       (order.assignedMechanics || []).map(id => (
@@ -487,7 +510,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                 </div>
 
                 <button className="btn" style={{ fontSize: '0.8rem', padding: '0.4rem' }} onClick={() => sendWhatsAppDelivery(order)}>
-                  💬 Enviar WA de Entrega
+                  Enviar Aviso de Retirada (WA)
                 </button>
               </div>
             ))}
@@ -499,7 +522,15 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
         {/* COLUMNA 5: A ENTREGAR */}
         <div className={`kanban-column col-a_entregar ${collapsedCols.a_entregar ? 'collapsed' : ''}`}>
           <div className="kanban-header" onClick={() => toggleColumn('a_entregar')} style={{ cursor: 'pointer', userSelect: 'none' }} title="Clic para desplegar o plegar sección">
-            <h4 className="kanban-column-title">📦 A Entregar</h4>
+            <h4 className="kanban-column-title" style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.9 }}>
+                <line x1="16.5" y1="9.4" x2="7.5" y2="4.21" />
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                <line x1="12" y1="22.08" x2="12" y2="12" />
+              </svg>
+              <span>A Entregar</span>
+            </h4>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
               <span className="kanban-count">{ordersByStatus.a_entregar.length}</span>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{collapsedCols.a_entregar ? '▼' : '▲'}</span>
@@ -510,7 +541,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
               <input
                 type="text"
                 className="form-control kanban-col-search"
-                placeholder="🔍 Buscar cliente o vehículo..."
+                placeholder="Buscar cliente o vehículo..."
                 value={colSearch.a_entregar}
                 onChange={(e) => handleColSearch('a_entregar', e.target.value)}
               />
@@ -521,7 +552,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                   <div>
                     <div className="card-order-id">{order.id}</div>
                     <div className="card-vehicle-title">{order.vehicle.brand} {order.vehicle.model}</div>
-                    <div className="card-client-name">👤 {order.client.fullName}</div>
+                    <div className="card-client-name">{order.client.fullName}</div>
                   </div>
                   <button
                     type="button"
@@ -554,7 +585,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                   style={{ background: 'linear-gradient(135deg, var(--color-success), #059669)', color: '#000', fontSize: '0.8rem', padding: '0.4rem' }} 
                   onClick={() => deliverVehicle(order.id)}
                 >
-                  ✅ Confirmar Entrega
+                  Confirmar Entrega
                 </button>
               </div>
             ))}
@@ -570,7 +601,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
         <div className="overlay">
           <form className="glass-panel modal-content" onSubmit={handleSaveDiagnosis}>
             <button type="button" className="modal-close" onClick={() => setModalType(null)}>×</button>
-            <h3 className="modal-title">🔧 Registro de Diagnóstico y Presupuesto</h3>
+            <h3 className="modal-title">Registro de Diagnóstico y Presupuesto</h3>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
               Vehículo: <strong>{selectedOrder.vehicle.brand} {selectedOrder.vehicle.model}</strong> | Matrícula: <strong>{selectedOrder.vehicle.licensePlate}</strong>
             </div>
@@ -613,7 +644,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
 
             <div style={{ display: 'flex', gap: '0.5rem' }}>
               <button type="submit" className="btn btn-secondary" style={{ flex: 1 }}>
-                💾 Solo Guardar
+                Solo Guardar
               </button>
               <button
                 type="button"
@@ -627,7 +658,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                   handleSaveDiagnosis(null, true);
                 }}
               >
-                🟢 Enviar WhatsApp
+                Enviar Presupuesto (WA)
               </button>
             </div>
           </form>
@@ -640,7 +671,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
           <div className="overlay">
             <div className="glass-panel modal-content">
               <button className="modal-close" onClick={() => setModalType(null)}>×</button>
-              <h3 className="modal-title">👥 Asignar Mecánicos a la Tarea</h3>
+              <h3 className="modal-title">Asignar Mecánicos a la Tarea</h3>
               <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                 Orden: <strong>{currentOrder.id}</strong> | {currentOrder.vehicle.brand} {currentOrder.vehicle.model}
               </div>
@@ -680,7 +711,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
         <div className="overlay">
           <div className="glass-panel modal-content">
             <button className="modal-close" onClick={() => setModalType(null)}>×</button>
-            <h3 className="modal-title">📝 Diagnóstico Registrado</h3>
+            <h3 className="modal-title">Diagnóstico Registrado</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.95rem' }}>
               <div><strong>Descripción del Cliente:</strong> {selectedOrder.problemDescription}</div>
               <div><strong>Anomalías Reportadas:</strong> {selectedOrder.clientAnomaliesReport || 'Ninguna'}</div>
@@ -700,7 +731,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                   style={{ flex: 1, borderColor: 'rgba(0, 242, 254, 0.4)', color: 'var(--color-primary)' }}
                   onClick={() => downloadOrderPdf(selectedOrder)}
                 >
-                  📄 Descargar PDF Firmado
+                  Descargar PDF Firmado
                 </button>
               )}
               <button className="btn" style={{ flex: 1 }} onClick={() => setModalType(null)}>
@@ -715,7 +746,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
         <div className="overlay">
           <div className="glass-panel modal-content" style={{ maxWidth: '480px' }}>
             <button className="modal-close" onClick={() => setModalType(null)}>×</button>
-            <h3 className="modal-title">💬 Notificación WhatsApp y Enlace Único</h3>
+            <h3 className="modal-title">Notificación WhatsApp y Enlace Único</h3>
             
             <div className="wa-simulation-log">
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
@@ -729,7 +760,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
             {selectedOrder.status === 'recepcion' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', background: 'rgba(0, 242, 254, 0.05)', padding: '0.5rem', borderRadius: '6px', border: '1px solid rgba(0, 242, 254, 0.2)', wordBreak: 'break-all' }}>
-                  🔗 <strong>URL Única:</strong> {getPortalUrl(selectedOrder)}
+                  <strong>URL Única:</strong> {getPortalUrl(selectedOrder)}
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <button
@@ -739,7 +770,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                       navigator.clipboard?.writeText(getPortalUrl(selectedOrder));
                     }}
                   >
-                    📋 Copiar Enlace
+                    Copiar Enlace
                   </button>
                   <button 
                     className="btn" 
@@ -749,7 +780,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                       setModalType(null);
                     }}
                   >
-                    🌐 Abrir Portal del Cliente
+                    Abrir Portal del Cliente
                   </button>
                 </div>
               </div>

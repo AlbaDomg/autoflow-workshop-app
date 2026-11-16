@@ -179,7 +179,7 @@ export default function ReceptionForm() {
     <form className="glass-panel form-grid" onSubmit={handleSubmit}>
       {/* SECCIÓN CLIENTE */}
       <div className="form-section">
-        <h3 className="form-section-title">👤 Datos del Cliente</h3>
+        <h3 className="form-section-title">Datos del Cliente</h3>
         
         <div className="form-group" style={{ position: 'relative' }}>
           <label>Nombre Completo *</label>
@@ -219,7 +219,7 @@ export default function ReceptionForm() {
               }}
             >
               <div style={{ padding: '0.35rem 0.75rem', fontSize: '0.72rem', color: 'var(--text-secondary)', borderBottom: '1px solid rgba(255,255,255,0.08)', fontWeight: 600 }}>
-                👥 Clientes registrados encontrados ({matchingClients.length}):
+                Clientes registrados encontrados ({matchingClients.length}):
               </div>
               {matchingClients.map(client => {
                 const primaryVeh = client.vehicles?.[0];
@@ -241,16 +241,16 @@ export default function ReceptionForm() {
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontWeight: 700, color: '#fff', fontSize: '0.88rem' }}>
-                        👤 {client.fullName}
+                        {client.fullName}
                       </span>
                       <span style={{ fontSize: '0.75rem', color: 'var(--color-primary)', background: 'rgba(0, 242, 254, 0.1)', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
                         {client.dniNif}
                       </span>
                     </div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                      <span>📞 {client.phone}</span>
+                      <span>Tel: {client.phone}</span>
                       {primaryVeh && (
-                        <span>🚗 {primaryVeh.brand} {primaryVeh.model} ({primaryVeh.licensePlate})</span>
+                        <span>{primaryVeh.brand} {primaryVeh.model} ({primaryVeh.licensePlate})</span>
                       )}
                     </div>
                   </div>
@@ -261,7 +261,7 @@ export default function ReceptionForm() {
 
           {existingClient && (
             <span style={{ color: 'var(--color-success)', fontSize: '0.8rem', fontWeight: 600, marginTop: '0.2rem', display: 'block' }}>
-              🟢 Cliente registrado detectado. Datos de contacto cargados.
+              Cliente registrado detectado. Datos de contacto cargados.
             </span>
           )}
         </div>
@@ -317,11 +317,11 @@ export default function ReceptionForm() {
 
       {/* SECCIÓN VEHÍCULO & FOTOS */}
       <div className="form-section">
-        <h3 className="form-section-title">🚗 Datos del Vehículo</h3>
+        <h3 className="form-section-title">Datos del Vehículo</h3>
 
         {clientVehicles.length > 0 && (
           <div className="form-group" style={{ marginBottom: '0.5rem' }}>
-            <label>🚙 Seleccionar Vehículo Registrado del Cliente:</label>
+            <label>Seleccionar Vehículo Registrado del Cliente:</label>
             <select
               className="form-control"
               value={selectedPlate}

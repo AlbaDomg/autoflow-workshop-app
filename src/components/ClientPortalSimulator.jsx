@@ -362,7 +362,7 @@ export default function ClientPortalSimulator({ token }) {
                 style={{ width: '100%', padding: '0.7rem' }}
                 onClick={() => downloadOrderPdf(activeOrder)}
               >
-                📄 Descargar PDF Oficial Firmado
+                Descargar PDF Oficial Firmado
               </button>
             </div>
           ) : (

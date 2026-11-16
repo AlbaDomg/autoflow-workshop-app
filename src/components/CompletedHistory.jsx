@@ -37,7 +37,7 @@ export default function CompletedHistory() {
       <div className="glass-panel" style={{ padding: '1.5rem', marginBottom: '1.5rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
-            <h2 className="logo-text" style={{ fontSize: '1.4rem' }}>📜 Historial de Coches Entregados</h2>
+            <h2 className="logo-text" style={{ fontSize: '1.4rem' }}>Historial de Coches Entregados</h2>
             <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
               Registro histórico de vehículos reparados y entregados físicamente a los clientes.
             </p>
@@ -47,7 +47,7 @@ export default function CompletedHistory() {
               <input
                 type="text"
                 className="form-control"
-                placeholder="🔍 Buscar por Cliente, Matrícula o Marca/Modelo..."
+                placeholder="Buscar por Cliente, Matrícula o Marca/Modelo..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -71,7 +71,7 @@ export default function CompletedHistory() {
                   }
                 }}
               >
-                🧹 Limpiar Todo el Historial
+                Limpiar Todo el Historial
               </button>
             )}
           </div>
@@ -106,7 +106,7 @@ export default function CompletedHistory() {
               <div className="history-card-body">
                 {/* Datos del Cliente */}
                 <div>
-                  <h4 className="section-small-title">👤 Cliente</h4>
+                  <h4 className="section-small-title">Cliente</h4>
                   <div className="history-details-list">
                     <div><span>Nombre:</span> <strong>{order.client.fullName}</strong></div>
                     <div><span>DNI/NIF:</span> {order.client.dniNif}</div>
@@ -117,7 +117,7 @@ export default function CompletedHistory() {
 
                 {/* Datos del Vehículo */}
                 <div>
-                  <h4 className="section-small-title">🚗 Vehículo</h4>
+                  <h4 className="section-small-title">Vehículo</h4>
                   <div className="history-details-list">
                     <div><span>Kilómetros:</span> {order.vehicle.mileage.toLocaleString()} km</div>
                     <div><span>Nº Bastidor:</span> <code style={{ color: 'var(--color-primary)' }}>{order.vehicle.vin}</code></div>
@@ -128,7 +128,7 @@ export default function CompletedHistory() {
 
                 {/* Historial Técnico / Mecánicos */}
                 <div>
-                  <h4 className="section-small-title">🔧 Datos Técnicos</h4>
+                  <h4 className="section-small-title">Datos Técnicos</h4>
                   <div className="history-details-list">
                     <div><span>Mecánicos Responsables:</span></div>
                     <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
@@ -151,7 +151,7 @@ export default function CompletedHistory() {
 
                 {/* Liquidación Financiera */}
                 <div>
-                  <h4 className="section-small-title">💰 Liquidación</h4>
+                  <h4 className="section-small-title">Liquidación</h4>
                   <div className="history-details-list">
                     <div><span>Coste Diagnóstico:</span> {(order.financials?.diagnosticCost ?? 50).toFixed(2)}€</div>
                     {order.financials?.hasAcceptedRepair === 'approved' && (
@@ -173,7 +173,7 @@ export default function CompletedHistory() {
                 <div className="security-metadata">
                   {order.signature?.signed ? (
                     <>
-                      <div>🔒 <strong>Evidencia de Consentimiento Legal:</strong></div>
+                      <div><strong>Evidencia de Consentimiento Legal:</strong></div>
                       <div>Fecha Firma: {formatDate(order.signature.signedAt)}</div>
                       <div>IP Autor: {order.signature.ipAddress || '84.120.45.18'} | Navegador: {String(order.signature.userAgent || '').substring(0, 70)}...</div>
                     </>
@@ -190,7 +190,7 @@ export default function CompletedHistory() {
                         style={{ fontSize: '0.75rem', padding: '0.4rem 0.7rem', borderColor: 'rgba(0, 242, 254, 0.4)', color: 'var(--color-primary)' }}
                         onClick={() => downloadOrderPdf(order)}
                       >
-                        📄 Descargar PDF Oficial
+                        Descargar PDF Oficial
                       </button>
                       {order.signature.signatureImageBase64 && (
                         <div>
@@ -213,7 +213,7 @@ export default function CompletedHistory() {
                     }}
                     title="Eliminar este coche del historial"
                   >
-                    🗑️ Eliminar
+                    Eliminar
                   </button>
                 </div>
               </div>

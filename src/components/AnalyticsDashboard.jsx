@@ -98,7 +98,7 @@ export default function AnalyticsDashboard() {
       <div className="dashboard-grid" style={{ padding: 0 }}>
         
         <div className="glass-panel analytics-card">
-          <span className="analytics-label">📈 Conversión de Presupuestos</span>
+          <span className="analytics-label">Conversión de Presupuestos</span>
           <span className="analytics-value">{conversionRate.toFixed(1)}%</span>
           <span className="analytics-subtext">
             {approvedCount} Aprobados de {totalDecisions} presupuestos respondidos.
@@ -109,7 +109,7 @@ export default function AnalyticsDashboard() {
         </div>
 
         <div className="glass-panel analytics-card">
-          <span className="analytics-label">💰 Estado del Embudo</span>
+          <span className="analytics-label">Estado del Embudo</span>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: '0.8rem', marginTop: '0.25rem' }}>
             <div>Aprobados: <strong style={{ color: 'var(--color-success)' }}>{approvedCount}</strong></div>
             <div>Pendiente Firma: <strong style={{ color: 'var(--color-warning)' }}>{pendingCount}</strong></div>
@@ -122,7 +122,7 @@ export default function AnalyticsDashboard() {
         </div>
 
         <div className="glass-panel analytics-card">
-          <span className="analytics-label">📊 Rentabilidad Estimada</span>
+          <span className="analytics-label">Rentabilidad Estimada</span>
           <span className="analytics-value" style={{ color: 'var(--color-success)' }}>
             {orders.reduce((sum, o) => sum + (o.status === 'entregado' ? o.financials.totalDue : 0), 0).toFixed(2)}€
           </span>

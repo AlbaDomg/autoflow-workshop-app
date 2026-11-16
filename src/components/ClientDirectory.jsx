@@ -221,14 +221,14 @@ export default function ClientDirectory() {
         </div>
 
         <button className="btn" onClick={handleOpenModal} style={{ width: '100%', padding: '0.6rem', fontSize: '0.9rem' }}>
-          ➕ Registrar Cliente
+          Registrar Cliente
         </button>
 
         <div className="form-group">
           <input 
             type="text" 
             className="form-control" 
-            placeholder="🔍 Buscar cliente, NIF, coche o matrícula..." 
+            placeholder="Buscar cliente, NIF, coche o matrícula..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -248,7 +248,7 @@ export default function ClientDirectory() {
                 </div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between', marginTop: '0.15rem' }}>
                   <span>NIF: {c.dniNif}</span>
-                  <span>🚗 {c.vehicles.length} coches</span>
+                  <span>{c.vehicles.length} {c.vehicles.length === 1 ? 'vehículo' : 'vehículos'}</span>
                 </div>
               </div>
               <button
@@ -320,7 +320,7 @@ export default function ClientDirectory() {
             {/* VEHÍCULOS VINCULADOS */}
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                <h4 className="section-small-title" style={{ margin: 0 }}>🚙 Vehículos Vinculados ({activeClient.vehicles.length})</h4>
+                <h4 className="section-small-title" style={{ margin: 0 }}>Vehículos Vinculados ({activeClient.vehicles.length})</h4>
                 <button
                   type="button"
                   className="btn btn-secondary"
@@ -340,7 +340,7 @@ export default function ClientDirectory() {
                   }}
                   title="Vincular un vehículo adicional a este cliente"
                 >
-                  ➕ Vincular Vehículo
+                  + Vincular Vehículo
                 </button>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: '0.75rem' }}>
@@ -401,7 +401,7 @@ export default function ClientDirectory() {
                               width: '100%'
                             }}
                           >
-                            <span>📄 Documentos Firmados ({vehicleSignedOrders.length})</span>
+                            <span>Documentos Firmados ({vehicleSignedOrders.length})</span>
                             <span>{expandedVehicleDocs[v.licensePlate] ? '▲' : '▼'}</span>
                           </button>
                           {expandedVehicleDocs[v.licensePlate] && vehicleSignedOrders.map(so => (
@@ -412,7 +412,7 @@ export default function ClientDirectory() {
                               style={{ fontSize: '0.68rem', padding: '0.25rem 0.45rem', textAlign: 'left', justifyContent: 'flex-start' }}
                               onClick={() => downloadOrderPdf(so)}
                             >
-                              📥 PDF {so.id} ({so.financials.hasAcceptedRepair === 'approved' ? 'Aceptado' : so.financials.hasAcceptedRepair === 'postponed' ? 'Pospuesto' : 'Rechazado'})
+                              PDF {so.id} ({so.financials.hasAcceptedRepair === 'approved' ? 'Aceptado' : so.financials.hasAcceptedRepair === 'postponed' ? 'Pospuesto' : 'Rechazado'})
                             </button>
                           ))}
                         </div>
@@ -506,7 +506,7 @@ export default function ClientDirectory() {
                                 onClick={() => downloadOrderPdf(visit)}
                                 title="Descargar PDF Oficial firmado por el cliente"
                               >
-                                📄 Descargar PDF Firmado
+                                Descargar PDF Firmado
                               </button>
                             )}
                             {visit.financials.hasAcceptedRepair === 'pending' && visit.diagnosisText && (
@@ -526,7 +526,7 @@ export default function ClientDirectory() {
                                 onClick={() => window.open(getPortalUrl(visit), '_blank')}
                                 title="Abrir enlace único del portal de aprobación"
                               >
-                                🔗 Abrir Portal Cliente
+                                Abrir Portal Cliente
                               </button>
                             )}
                             {visit.financials.hasAcceptedRepair === 'postponed' && (
@@ -649,7 +649,7 @@ export default function ClientDirectory() {
                   checked={hasVehicle} 
                   onChange={(e) => setHasVehicle(e.target.checked)} 
                 />
-                🚙 Vincular vehículo inicial
+                Vincular vehículo inicial
               </label>
             </div>
 
@@ -718,7 +718,7 @@ export default function ClientDirectory() {
             {error && <div style={{ color: 'var(--color-danger)', fontSize: '0.85rem', fontWeight: 600 }}>{error}</div>}
 
             <button type="submit" className="btn" style={{ width: '100%', marginTop: '0.5rem' }}>
-              💾 Guardar Cliente
+              Guardar Cliente
             </button>
           </form>
         </div>
@@ -730,7 +730,7 @@ export default function ClientDirectory() {
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
             <div className="modal-header">
               <h3 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--color-primary)' }}>
-                🚙 Vincular Nuevo Vehículo a {activeClient?.fullName}
+                Vincular Nuevo Vehículo a {activeClient?.fullName}
               </h3>
               <button 
                 type="button" 
