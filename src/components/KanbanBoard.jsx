@@ -642,25 +642,9 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
               />
             </div>
 
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button type="submit" className="btn btn-secondary" style={{ flex: 1 }}>
-                Solo Guardar
-              </button>
-              <button
-                type="button"
-                className="btn"
-                style={{ flex: 1.4, background: 'linear-gradient(135deg, #25D366, #128C7E)', color: '#fff' }}
-                onClick={(e) => {
-                  if (!diagnosisText.trim() || !repairSubtotal) {
-                    e.currentTarget.form?.reportValidity();
-                    return;
-                  }
-                  handleSaveDiagnosis(null, true);
-                }}
-              >
-                Enviar Presupuesto (WA)
-              </button>
-            </div>
+            <button type="submit" className="btn" style={{ width: '100%' }}>
+              Guardar
+            </button>
           </form>
         </div>
       )}

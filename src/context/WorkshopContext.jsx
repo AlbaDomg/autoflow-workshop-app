@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import {
   isCourtesyText,
   isAutomotiveIssue,
@@ -440,6 +440,18 @@ export const WorkshopProvider = ({ children }) => {
   // Toasts en pantalla (temporales)
   const [toasts, setToasts] = useState([]);
 
+  const addToast = useCallback((message, type = 'info') => {
+    const id = `TOAST-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 6000);
+  }, []);
+
+  const removeToast = useCallback((id) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
   // Estado del Simulador Visual de Chat de WhatsApp (conectable con n8n + IA)
   const [whatsappChats, setWhatsappChats] = useState(() => {
     const saved = localStorage.getItem('autoflow_whatsapp_chats');
@@ -521,6 +533,7 @@ export const WorkshopProvider = ({ children }) => {
   const [isWaAiTyping, setIsWaAiTyping] = useState(false);
   const ordersHydratedRef = useRef(false);
   const clientsHydratedRef = useRef(false);
+  const notificationsHydratedRef = useRef(false);
   const clientsInitialSeedDoneRef = useRef(false);
   const skipNextOrdersPushRef = useRef(false);
   const skipNextClientsPushRef = useRef(false);
@@ -710,12 +723,74 @@ export const WorkshopProvider = ({ children }) => {
         .catch(() => {});
     };
 
+    // Sincronizar notificaciones en tiempo real con el backend (Neon PostgreSQL / API)
+    const syncNotificationsWithBackend = () => {
+      fetch('/api/notifications')
+        .then(r => r.json())
+        .then(res => {
+          if (res && res.success && Array.isArray(res.notifications)) {
+            setNotifications(prev => {
+              const currentIds = new Set(prev.map(n => n.id));
+              const currentMsgs = new Set(prev.map(n => n.message));
+
+              // Detectar notificaciones nuevas que vienen de la nube y que no teníamos localmente
+              const newlyArrived = res.notifications.filter(
+                n => n && !currentIds.has(n.id) && !currentMsgs.has(n.message)
+              );
+
+              // Si ya estamos hidratados y llega una nueva no leída (ej: desde el móvil), mostrar toast en la pantalla del PC
+              if (notificationsHydratedRef.current && newlyArrived.length > 0) {
+                newlyArrived.slice(0, 3).forEach(n => {
+                  if (!n.read) {
+                    addToast(n.message, n.type || 'info');
+                  }
+                });
+              }
+              notificationsHydratedRef.current = true;
+
+              // Fusionar sin duplicados preservando si alguna fue leída
+              const map = new Map();
+              res.notifications.forEach(n => {
+                if (n && n.message) {
+                  map.set(n.id || n.message, n);
+                }
+              });
+              prev.forEach(n => {
+                if (n && n.message) {
+                  const key = n.id || n.message;
+                  if (map.has(key)) {
+                    const fromServer = map.get(key);
+                    map.set(key, {
+                      ...fromServer,
+                      ...n,
+                      read: Boolean(fromServer.read || n.read)
+                    });
+                  } else {
+                    map.set(key, n);
+                  }
+                }
+              });
+
+              const merged = Array.from(map.values())
+                .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+                .slice(0, 100);
+
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
+              return merged;
+            });
+          }
+        })
+        .catch(() => {});
+    };
+
     syncClientsWithBackend();
     syncOrdersWithBackend();
+    syncNotificationsWithBackend();
     const syncInterval = setInterval(() => {
       syncClientsWithBackend();
       syncOrdersWithBackend();
-    }, 3500);
+      syncNotificationsWithBackend();
+    }, 3000);
     return () => clearInterval(syncInterval);
   }, []);
 
@@ -1087,6 +1162,24 @@ export const WorkshopProvider = ({ children }) => {
       text: text.trim(),
       portalUrl: text.includes('/portal/') ? portalUrl : null
     });
+
+    // Detección inmediata de urgencia o solicitud de llamada para no esperar a la respuesta de la IA
+    if (senderRole === 'client') {
+      const immediateClientName = matchedClient?.fullName || targetOrder.client?.fullName || '';
+      const immediateClientPhone = matchedClient?.phone || targetOrder.client?.phone || '';
+      const immediateVehLabel = activeVehicle?.brand
+        ? `${activeVehicle.brand} ${activeVehicle.model || ''}${activeVehicle.licensePlate ? ` (${activeVehicle.licensePlate})` : ''}`.trim()
+        : '';
+      const preAlert = detectAdminAlert({
+        text,
+        clientName: immediateClientName,
+        clientPhone: immediateClientPhone,
+        vehicleLabel: immediateVehLabel
+      });
+      if (preAlert) {
+        addNotification(preAlert.message, preAlert.type);
+      }
+    }
 
     // Instrucción contextual dinámica para el Agente IA de n8n
     let aiSystemInstruction = '';
@@ -1774,45 +1867,55 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
   const addNotification = (message, type = 'info') => {
     const cleanMsg = String(message || '').trim();
     if (!cleanMsg) return;
+    const newNotif = {
+      id: `NOTIF-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      message: cleanMsg,
+      type, // 'success' | 'warning' | 'danger' | 'info'
+      read: false,
+      createdAt: new Date().toISOString()
+    };
     setNotifications(prev => {
       // Evitar notificaciones repetidas con el mismo texto
       if (prev.some(n => n.message === cleanMsg)) {
         return prev;
       }
-      const newNotif = {
-        id: `NOTIF-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        message: cleanMsg,
-        type, // 'success' | 'warning' | 'danger' | 'info'
-        read: false,
-        createdAt: new Date().toISOString()
-      };
       return [newNotif, ...prev];
     });
     addToast(cleanMsg, type);
-  };
 
-  const addToast = (message, type = 'info') => {
-    const id = `TOAST-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 6000);
-  };
-
-  const removeToast = (id) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
+    // Enviar inmediatamente a la base de datos para sincronizar con el PC y resto de dispositivos
+    fetch('/api/notifications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newNotif)
+    }).catch(() => {});
   };
 
   const markNotificationAsRead = (id) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    fetch('/api/notifications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ markRead: id })
+    }).catch(() => {});
   };
 
   const markAllNotificationsAsRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    fetch('/api/notifications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ markAllRead: true })
+    }).catch(() => {});
   };
 
   const clearNotifications = () => {
     setNotifications([]);
+    fetch('/api/notifications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clearAll: true })
+    }).catch(() => {});
   };
 
   // Enviar datos al Webhook de n8n

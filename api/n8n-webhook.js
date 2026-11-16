@@ -1,4 +1,4 @@
-import { getClientsDb, saveClientsDb } from './_db.js';
+import { getClientsDb, saveClientsDb, getNotificationsDb, saveNotificationsDb } from './_db.js';
 
 export default async function handler(req, res) {
   // Configuración de cabeceras CORS para permitir llamadas desde cualquier dispositivo/móvil
@@ -55,6 +55,38 @@ export default async function handler(req, res) {
         }
       } catch (errDb) {
         console.warn('Error sincronizando perfil en db backend:', errDb);
+      }
+    }
+
+    // Detección automática y registro en tiempo real de avisos de urgencia / mecánico para la Campanita del taller
+    const rawMsg = String(body.chatInput || body.message || body.text || '').trim();
+    if (rawMsg) {
+      const lower = rawMsg.toLowerCase();
+      const isUrgent = /\b(urgente|urgencia|emergencia|gr[uú]a|dejado\s+tirad[oa]|no\s+puedo\s+circular|echando\s+humo|accidente)\b/i.test(lower);
+      const isCallReq = /(?:hablar\s+con\s+(?:una\s+persona|un\s+mec[aá]nico|el\s+mec[aá]nico|el\s+jefe|el\s+encargado|el\s+responsable|un\s+responsable|alguien|humano)|p[aá]same\s+con|que\s+me\s+llame|ll[aá]mame|llamadme)/i.test(lower);
+      if (isUrgent || isCallReq) {
+        try {
+          const notifs = await getNotificationsDb();
+          const who = body.fullName || body.clientName || body.client?.fullName || 'Cliente por WhatsApp';
+          const phone = body.phone || body.clientPhone || body.client?.phone ? ` (${body.phone || body.clientPhone || body.client?.phone})` : '';
+          const excerpt = rawMsg.length > 55 ? `${rawMsg.slice(0, 55)}...` : rawMsg;
+          const notifMsg = isUrgent
+            ? `🚨 URGENCIA EN TALLER: ${who}${phone} comunica un caso urgente («${excerpt}»). Contactar de inmediato.`
+            : `📞 ATENCIÓN REQUERIDA: ${who}${phone} solicita contacto directo del taller («${excerpt}»).`;
+          const exists = notifs.some(n => n.message === notifMsg);
+          if (!exists) {
+            notifs.unshift({
+              id: `NOTIF-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              message: notifMsg,
+              type: isUrgent ? 'danger' : 'warning',
+              read: false,
+              createdAt: new Date().toISOString()
+            });
+            await saveNotificationsDb(notifs.slice(0, 100));
+          }
+        } catch (errN) {
+          console.warn('Error guardando alerta automática en db:', errN);
+        }
       }
     }
     

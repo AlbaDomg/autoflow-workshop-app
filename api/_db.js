@@ -7,6 +7,9 @@ const STATIC_CLIENTS_FILE = path.join(process.cwd(), 'clients-db.json');
 const TMP_ORDERS_FILE = path.join('/tmp', 'orders-db.json');
 const STATIC_ORDERS_FILE = path.join(process.cwd(), 'orders-db.json');
 
+const TMP_NOTIFICATIONS_FILE = path.join('/tmp', 'notifications-db.json');
+const STATIC_NOTIFICATIONS_FILE = path.join(process.cwd(), 'notifications-db.json');
+
 export function getDbUrl() {
   return (
     process.env.DATABASE_URL ||
@@ -162,5 +165,66 @@ export async function saveOrdersDb(orders) {
   } catch {}
   try {
     fs.writeFileSync(STATIC_ORDERS_FILE, JSON.stringify(orders, null, 2), 'utf-8');
+  } catch {}
+}
+
+function readStaticNotificationsFallback() {
+  try {
+    if (fs.existsSync(TMP_NOTIFICATIONS_FILE)) {
+      const data = JSON.parse(fs.readFileSync(TMP_NOTIFICATIONS_FILE, 'utf-8'));
+      if (Array.isArray(data)) return data;
+    }
+  } catch {}
+  try {
+    if (fs.existsSync(STATIC_NOTIFICATIONS_FILE)) {
+      const data = JSON.parse(fs.readFileSync(STATIC_NOTIFICATIONS_FILE, 'utf-8'));
+      if (Array.isArray(data)) return data;
+    }
+  } catch {}
+  return [];
+}
+
+export async function getNotificationsDb() {
+  try {
+    const sql = await getNeonSql();
+    if (sql) {
+      const rows = await sql`SELECT data FROM autoflow_store WHERE key = 'notifications' LIMIT 1`;
+      if (rows.length > 0 && Array.isArray(rows[0].data)) {
+        return rows[0].data;
+      }
+      const initial = readStaticNotificationsFallback();
+      await sql`
+        INSERT INTO autoflow_store (key, data, updated_at)
+        VALUES ('notifications', ${JSON.stringify(initial)}::jsonb, NOW())
+        ON CONFLICT (key) DO NOTHING
+      `;
+      return initial;
+    }
+  } catch (err) {
+    console.warn('Error leyendo notifications de Neon DB, usando fallback:', err.message);
+  }
+  return readStaticNotificationsFallback();
+}
+
+export async function saveNotificationsDb(notifications) {
+  if (!Array.isArray(notifications)) return;
+  try {
+    const sql = await getNeonSql();
+    if (sql) {
+      await sql`
+        INSERT INTO autoflow_store (key, data, updated_at)
+        VALUES ('notifications', ${JSON.stringify(notifications)}::jsonb, NOW())
+        ON CONFLICT (key) DO UPDATE
+        SET data = EXCLUDED.data, updated_at = NOW()
+      `;
+    }
+  } catch (err) {
+    console.warn('Error guardando notifications en Neon DB:', err.message);
+  }
+  try {
+    fs.writeFileSync(TMP_NOTIFICATIONS_FILE, JSON.stringify(notifications, null, 2), 'utf-8');
+  } catch {}
+  try {
+    fs.writeFileSync(STATIC_NOTIFICATIONS_FILE, JSON.stringify(notifications, null, 2), 'utf-8');
   } catch {}
 }

@@ -510,7 +510,7 @@ export const detectAdminAlert = ({ text = '', aiReply = '', clientName = '', cli
 
   // 3. Solicitud de hablar con un responsable / mecánico o promesa de contacto del taller
   if (
-    /(?:hablar\s+con\s+(?:una\s+persona|un\s+mec[aá]nico|el\s+jefe|el\s+encargado|alguien)|que\s+me\s+llame|ll[aá]mame|llamadme)/i.test(cleanText) ||
+    /(?:hablar\s+con\s+(?:una\s+persona|un\s+mec[aá]nico|el\s+mec[aá]nico|el\s+jefe|el\s+encargado|el\s+responsable|un\s+responsable|alguien|humano)|p[aá]same\s+con|que\s+me\s+llame|ll[aá]mame|llamadme)/i.test(cleanText) ||
     /el\s+taller\s+se\s+pondr[aá]\s+en\s+contacto/i.test(aiReply)
   ) {
     return {
