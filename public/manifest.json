@@ -1,0 +1,35 @@
+{
+  "short_name": "Talleres Naranjo",
+  "name": "Talleres Naranjo - Gestión de Taller",
+  "description": "Sistema de recepción, órdenes de trabajo y gestión para Talleres Naranjo",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "type": "image/png",
+      "sizes": "64x64"
+    },
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo-talleres-naranjo.png",
+      "type": "image/png",
+      "sizes": "243x211",
+      "purpose": "any"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0b132b",
+  "theme_color": "#f97316",
+  "display": "standalone",
+  "orientation": "portrait"
+}
