@@ -97,41 +97,63 @@ export default function Navigation() {
           </button>
 
           {showDropdown && (
-            <div className="bell-dropdown glass-panel">
-              <div className="bell-dropdown-header">
-                <h4>Campana de Avisos</h4>
-                <div className="bell-dropdown-actions">
-                  {unreadCount > 0 && (
-                    <button onClick={markAllNotificationsAsRead} className="bell-action-btn">Marcar como leído</button>
-                  )}
-                  {notifications.length > 0 && (
-                    <button onClick={clearNotifications} className="bell-action-btn text-danger">Limpiar todo</button>
+            <>
+              <div 
+                style={{
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  zIndex: 9999,
+                  background: 'transparent'
+                }}
+                onClick={() => setShowDropdown(false)}
+              />
+              <div className="bell-dropdown glass-panel">
+                <div className="bell-dropdown-header">
+                  <h4>Campana de Avisos</h4>
+                  <div className="bell-dropdown-actions">
+                    {unreadCount > 0 && (
+                      <button onClick={markAllNotificationsAsRead} className="bell-action-btn">Marcar como leído</button>
+                    )}
+                    {notifications.length > 0 && (
+                      <button onClick={clearNotifications} className="bell-action-btn text-danger">Limpiar todo</button>
+                    )}
+                    <button 
+                      onClick={() => setShowDropdown(false)} 
+                      className="bell-action-btn"
+                      title="Cerrar"
+                      style={{ fontSize: '0.95rem', padding: '0 0.35rem', lineHeight: '1', opacity: 0.8 }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+                <div className="bell-dropdown-list">
+                  {notifications.length === 0 ? (
+                    <div className="bell-empty">Sin avisos nuevos</div>
+                  ) : (
+                    notifications.map(n => (
+                      <div 
+                        key={n.id} 
+                        className={`bell-item ${n.read ? 'read' : 'unread'} type-${n.type}`}
+                        onClick={() => {
+                          markNotificationAsRead(n.id);
+                          // Cerrar al pulsar
+                          setShowDropdown(false);
+                        }}
+                      >
+                        <div className="bell-item-content">
+                          <p>{n.message}</p>
+                          <span className="bell-item-time">{formatTime(n.createdAt)}</span>
+                        </div>
+                      </div>
+                    ))
                   )}
                 </div>
               </div>
-              <div className="bell-dropdown-list">
-                {notifications.length === 0 ? (
-                  <div className="bell-empty">Sin avisos nuevos</div>
-                ) : (
-                  notifications.map(n => (
-                    <div 
-                      key={n.id} 
-                      className={`bell-item ${n.read ? 'read' : 'unread'} type-${n.type}`}
-                      onClick={() => {
-                        markNotificationAsRead(n.id);
-                        // Cerrar al pulsar
-                        setShowDropdown(false);
-                      }}
-                    >
-                      <div className="bell-item-content">
-                        <p>{n.message}</p>
-                        <span className="bell-item-time">{formatTime(n.createdAt)}</span>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
+            </>
           )}
         </div>
       </div>
