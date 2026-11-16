@@ -323,3 +323,30 @@ export const detectAdminAlert = ({ text = '', aiReply = '', clientName = '', cli
 
   return null;
 };
+
+// Limpia de la respuesta visible cualquier listado de "horas ocupadas" que la IA haya escrito para razonar,
+// dejando en la burbuja de WhatsApp ÚNICAMENTE el día y las horas disponibles de forma 100% profesional.
+export const sanitizeCalendarProposalText = (rawText = '') => {
+  if (!rawText || typeof rawText !== 'string') return rawText;
+  let text = rawText;
+
+  // Caso 1: "Para el *martes 22 de noviembre, tengo ocupadas las siguientes horas: - 09:00... Pero puedo ofrecerte:"
+  text = text.replace(
+    /(Para\s+(?:el\s+|mañana\s+|este\s+)?\*?[^,\n:]+?)\*?,?\s*(?:ya\s+)?(?:tengo|tenemos|est[aá]n)\s+ocupadas[\s\S]*?(?:Pero\s+|Sin\s+embargo,?\s+)?(puedo\s+ofrecerte|tengo\s+disponibles?|tengo\s+hueco\s+libre|tenemos\s+disponibles?)/i,
+    '$1 $2'
+  );
+
+  // Caso 2: "Para el lunes 22 ya tenemos ocupadas las 09:00 y 14:00, pero tengo hueco libre a las..."
+  text = text.replace(
+    /(Para\s+(?:el\s+|mañana\s+|este\s+)?[^,\n:]+?),?\s*(?:ya\s+)?(?:tengo|tenemos|est[aá]n|hay)\s+(?:ocupadas?|citas?\s+agendadas?)[^.\n]*?,\s*pero\s+(tengo\s+(?:hueco\s+)?(?:libre|disponible)|puedo\s+ofrecerte)/gi,
+    '$1 $2'
+  );
+
+  // Caso 3: Párrafo inicial diciendo "Mañana ya tienes/hay una cita agendada a las 13:00." seguido de oferta de tramos
+  text = text.replace(
+    /^[^\n]*?(?:ya\s+(?:tienes|tenemos|hay)\s+una\s+cita\s+agendada|tengo\s+ocupadas\s+las\s+siguientes\s+horas)[^\n]*\n+(?:[-•*]\s*\d{1,2}:\d{2}[^\n]*\n+)*(?:¿Te\s+gustar[ií]a\s+elegir\s+otra\s+hora\?\s*)?/i,
+    ''
+  );
+
+  return text.trim();
+};

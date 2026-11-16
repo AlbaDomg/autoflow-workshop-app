@@ -1,7 +1,8 @@
 // Tests de escenarios de chat: ejecutar con `node tests/chat-scenarios.mjs`
 import {
   isAutomotiveIssue, parseClientAndVehicleFromConversation,
-  extractDetectedProblem, decideCardCreation, detectAdminAlert, GENERIC_PROBLEM
+  extractDetectedProblem, decideCardCreation, detectAdminAlert,
+  sanitizeCalendarProposalText, GENERIC_PROBLEM
 } from '../src/utils/chatCardLogic.js';
 
 let pass = 0, fail = 0;
@@ -128,6 +129,20 @@ const aCall = detectAdminAlert({
   clientPhone: '+34620922500'
 });
 check('detecta solicitud de hablar con mecánico', aCall && aCall.type === 'warning' && aCall.category === 'human_contact');
+
+console.log('\n[13] Limpieza automática de horas ocupadas en la respuesta de WhatsApp');
+const rawScreenshotMsg = `Para el *martes 22 de noviembre, tengo ocupadas las siguientes horas:
+
+- 09:00 - 10:00
+- 14:00 - 15:00
+
+Pero puedo ofrecerte:
+
+- 08:00, 08:30, 10:30, 11:00, 11:30 o 12:00 por la mañana.
+- 13:00, 13:30, 15:30 o 16:00* por la tarde.`;
+const cleanedMsg = sanitizeCalendarProposalText(rawScreenshotMsg);
+check('oculta horas ocupadas (09:00 - 10:00 y 14:00 - 15:00)', !cleanedMsg.includes('ocupadas') && !cleanedMsg.includes('09:00 - 10:00'), cleanedMsg);
+check('mantiene horas libres de mañana y tarde', cleanedMsg.includes('08:00, 08:30, 10:30') && cleanedMsg.includes('13:00, 13:30, 15:30 o 16:00'), cleanedMsg);
 
 console.log(`\nResultado: ${pass} OK, ${fail} fallos`);
 process.exit(fail ? 1 : 0);

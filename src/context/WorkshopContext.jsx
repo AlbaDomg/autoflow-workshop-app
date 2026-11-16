@@ -5,7 +5,8 @@ import {
   parseClientAndVehicleFromConversation,
   extractDetectedProblem,
   decideCardCreation,
-  detectAdminAlert
+  detectAdminAlert,
+  sanitizeCalendarProposalText
 } from '../utils/chatCardLogic';
 import { generateSignedOrderPdf } from '../utils/pdfGenerator';
 
@@ -925,7 +926,8 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
       if (response.ok && result) {
         // Solo extraemos y mostramos respuesta automática de la IA cuando es el cliente quien escribe
         if (senderRole === 'client') {
-          const aiReply = extractAiReply(result);
+          const rawAiReply = extractAiReply(result);
+          const aiReply = rawAiReply ? sanitizeCalendarProposalText(rawAiReply) : null;
 
           if (aiReply) {
             // Inyectar una sola vez la respuesta de la IA (appendWhatsAppMessage ya sincroniza atómicamente)
