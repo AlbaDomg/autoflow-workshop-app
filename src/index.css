@@ -247,6 +247,10 @@ body {
   box-shadow: var(--shadow-neon-primary);
 }
 
+.nav-label-short {
+  display: none;
+}
+
 /* Tablet & Mobile Header Adaptability */
 @media (max-width: 1280px) {
   .top-header-bar {
@@ -289,6 +293,30 @@ body {
 }
 
 @media (max-width: 768px) {
+  .top-header-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.55rem;
+    position: relative;
+  }
+  .logo-container {
+    align-self: flex-start;
+  }
+  .brand-logo-img {
+    height: 62px;
+  }
+  .app-header {
+    position: static;
+    width: 100%;
+    padding: 0.45rem 0.4rem;
+  }
+  .header-quick-actions {
+    position: absolute;
+    top: 0.7rem;
+    right: 0;
+    gap: 0.55rem;
+    margin-left: 0;
+  }
   .nav-wa-text {
     display: none;
   }
@@ -300,8 +328,31 @@ body {
     font-size: 1.15rem;
     justify-content: center;
   }
-  .header-quick-actions {
-    gap: 0.5rem;
+  .nav-tabs {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.2rem;
+    width: 100%;
+    overflow: visible;
+    padding-bottom: 0;
+  }
+  .nav-tab {
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 0.45rem 0.15rem;
+    font-size: 0.67rem;
+    font-weight: 600;
+    gap: 0.25rem;
+    border-radius: 10px;
+    text-align: center;
+  }
+  .nav-label-full {
+    display: none;
+  }
+  .nav-label-short {
+    display: block;
+    line-height: 1.1;
   }
 }
 
