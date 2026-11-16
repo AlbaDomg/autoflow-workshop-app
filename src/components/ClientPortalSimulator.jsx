@@ -1,82 +1,93 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useWorkshop } from '../context/WorkshopContext';
 
-// Sub-componente Canvas de dibujo para firmas
+// Sub-componente Canvas de dibujo para firmas (Pointer Events + touch-action:none => la pantalla NO se mueve al firmar en móvil)
 function SignatureCanvas({ label, onSave, onClearActive }) {
   const canvasRef = useRef(null);
-  const [isDrawing, setIsDrawing] = useState(false);
+  const drawingRef = useRef(false);
+
+  const setupCanvas = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = Math.max(1, Math.round(rect.width || 300));
+    canvas.height = Math.max(1, Math.round(rect.height || 140));
+    const ctx = canvas.getContext('2d');
+    ctx.strokeStyle = '#00f2fe';
+    ctx.lineWidth = 2.8;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+  };
 
   useEffect(() => {
+    setupCanvas();
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width || 300;
-    canvas.height = rect.height || 120;
-
-    const ctx = canvas.getContext('2d');
-    ctx.strokeStyle = '#00f2fe';
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = 'round';
+    // Bloqueo nativo (no pasivo) del scroll/zoom del navegador mientras el dedo está sobre el lienzo de firma
+    const blockScroll = (e) => {
+      e.preventDefault();
+    };
+    canvas.addEventListener('touchstart', blockScroll, { passive: false });
+    canvas.addEventListener('touchmove', blockScroll, { passive: false });
+    canvas.addEventListener('touchend', blockScroll, { passive: false });
+    return () => {
+      canvas.removeEventListener('touchstart', blockScroll);
+      canvas.removeEventListener('touchmove', blockScroll);
+      canvas.removeEventListener('touchend', blockScroll);
+    };
   }, []);
 
   const getCoordinates = (e) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
-
-    if (e.touches && e.touches.length > 0) {
-      return {
-        x: e.touches[0].clientX - rect.left,
-        y: e.touches[0].clientY - rect.top
-      };
-    }
+    const scaleX = rect.width ? canvas.width / rect.width : 1;
+    const scaleY = rect.height ? canvas.height / rect.height : 1;
     return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY
     };
   };
 
   const startDrawing = (e) => {
     e.preventDefault();
-    const { x, y } = getCoordinates(e);
     const canvas = canvasRef.current;
     if (!canvas) return;
+    try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    const { x, y } = getCoordinates(e);
     const ctx = canvas.getContext('2d');
-
     ctx.strokeStyle = '#00f2fe';
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 2.8;
     ctx.lineCap = 'round';
-
+    ctx.lineJoin = 'round';
     ctx.beginPath();
     ctx.moveTo(x, y);
-    setIsDrawing(true);
+    // Punto inicial para que un toque corto también deje marca
+    ctx.lineTo(x + 0.1, y + 0.1);
+    ctx.stroke();
+    drawingRef.current = true;
   };
 
   const draw = (e) => {
-    if (!isDrawing) return;
+    if (!drawingRef.current) return;
     e.preventDefault();
-    const { x, y } = getCoordinates(e);
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const { x, y } = getCoordinates(e);
     const ctx = canvas.getContext('2d');
-
-    ctx.strokeStyle = '#00f2fe';
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = 'round';
-
     ctx.lineTo(x, y);
     ctx.stroke();
-    onSave(canvas.toDataURL());
   };
 
-  const stopDrawing = () => {
-    if (!isDrawing) return;
-    setIsDrawing(false);
+  const stopDrawing = (e) => {
+    if (!drawingRef.current) return;
+    drawingRef.current = false;
     const canvas = canvasRef.current;
-    if (canvas) {
-      onSave(canvas.toDataURL());
-    }
+    if (!canvas) return;
+    try { if (e) canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    // Se guarda la firma UNA sola vez al terminar el trazo (evita lag y re-renders mientras se dibuja)
+    onSave(canvas.toDataURL());
   };
 
   const clearCanvas = () => {
@@ -84,11 +95,10 @@ function SignatureCanvas({ label, onSave, onClearActive }) {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
     ctx.strokeStyle = '#00f2fe';
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 2.8;
     ctx.lineCap = 'round';
-
+    ctx.lineJoin = 'round';
     onClearActive();
   };
 
@@ -101,13 +111,10 @@ function SignatureCanvas({ label, onSave, onClearActive }) {
         <canvas
           ref={canvasRef}
           className="signature-canvas"
-          onMouseDown={startDrawing}
-          onMouseMove={draw}
-          onMouseUp={stopDrawing}
-          onMouseLeave={stopDrawing}
-          onTouchStart={startDrawing}
-          onTouchMove={draw}
-          onTouchEnd={stopDrawing}
+          onPointerDown={startDrawing}
+          onPointerMove={draw}
+          onPointerUp={stopDrawing}
+          onPointerCancel={stopDrawing}
         />
         <div className="signature-controls">
           <span style={{ color: 'var(--text-muted)' }}>Dibuje su firma aquí</span>

@@ -971,9 +971,14 @@ textarea.form-control {
 
 .signature-canvas {
   width: 100%;
-  height: 120px;
+  height: 140px;
   display: block;
   cursor: crosshair;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .signature-controls {
