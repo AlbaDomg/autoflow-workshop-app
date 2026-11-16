@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import {
   isCourtesyText,
   isAutomotiveIssue,
+  formatMechanicProblemSummary,
   parseClientAndVehicleFromConversation,
   extractDetectedProblem,
   decideCardCreation,
@@ -157,9 +158,11 @@ const ensureOrdersHaveTokens = (ordersList) => {
     .filter(o => o && o?.client?.dniNif !== '48392019Z')
     .map(o => {
       let cleanProblem = o.problemDescription;
-      // Sanear SOLO tarjetas que guardaron una cortesía/cita en lugar de avería (nunca tocar descripciones reales)
+      // Formatear de forma técnica y profesional para el mecánico cualquier motivo de tarjeta
       if (!cleanProblem || isCourtesyText(cleanProblem)) {
         cleanProblem = 'Diagnóstico y revisión en taller';
+      } else {
+        cleanProblem = formatMechanicProblemSummary(cleanProblem);
       }
 
       // Sanear modelos que tuvieran pegada la matrícula por error y reparar fichas con 'Nuevo Cliente'
@@ -1419,7 +1422,7 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
 
     const rawNewProblem = problemDesc || data.problemDescription;
     const finalNewProblem = (rawNewProblem && !isCourtesyText(rawNewProblem))
-      ? rawNewProblem
+      ? formatMechanicProblemSummary(rawNewProblem)
       : 'Diagnóstico y revisión en taller';
 
     const newOrder = {
@@ -1501,9 +1504,10 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
           problemDesc !== 'Revisión y diagnóstico en taller' &&
           problemDesc !== 'Avería comunicada por el cliente por WhatsApp';
 
-        const finalProblem = (existingHasReal && !incomingHasReal)
+        const rawFinalProblem = (existingHasReal && !incomingHasReal)
           ? existingOrder.problemDescription
           : (incomingHasReal ? problemDesc : (existingOrder.problemDescription || problemDesc || 'Diagnóstico y revisión en taller'));
+        const finalProblem = formatMechanicProblemSummary(rawFinalProblem);
 
         const mergedOrder = {
           ...existingOrder,

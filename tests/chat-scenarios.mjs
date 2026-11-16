@@ -74,7 +74,7 @@ r = turn({
   aiReply: 'He generado la tarjeta de recepción. ¿Qué día te viene bien?'
 });
 check('crea tarjeta igualmente (red de seguridad)', r.decision.create);
-check('motivo contiene arranca', /arranc/i.test(r.problem), r.problem);
+check('motivo contiene arranque', /arranque|arranc/i.test(r.problem), r.problem);
 
 console.log('\n[7] Nombre escrito solo, sin "me llamo"');
 r = turn({
@@ -212,7 +212,19 @@ r = turn({
   vehicleKnown: q5
 });
 check('SÍ crea una única tarjeta cuando dice el fallo y la IA confirma', r.decision.create);
-check('extrae el motivo limpio procesado por la IA = "fallo de frenos"', r.problem.toLowerCase() === 'fallo de frenos', r.problem);
+check('genera descripción técnica profesional para el mecánico', /Sistema de frenado:/i.test(r.problem), r.problem);
+
+console.log('\n[17] Confirmación de cita ("diagnóstico del Tesla 3 (Matrícula: 7654TYJ) el día...") NO sobreescribe la descripción técnica del mecánico');
+r = turn({
+  history: [
+    { sender: 'client', text: 'el motor hace ruidos raros' },
+    { sender: 'ai', text: 'He generado la tarjeta de recepción para tu Tesla 3.' }
+  ],
+  text: 'el martes a las 10:00',
+  aiReply: 'He agendado tu cita para el diagnóstico del Tesla 3 (Matrícula: 7654TYJ) el día martes 17 a las 10:00.',
+  vehicleKnown: { brand: 'Tesla', model: '3', licensePlate: '7654TYJ' }
+});
+check('conserva descripción técnica de motor para el mecánico (sin matrícula ni fecha)', /Motor: ruido mecánico anómalo/i.test(r.problem) && !/7654TYJ/i.test(r.problem), r.problem);
 
 console.log(`\nResultado: ${pass} OK, ${fail} fallos`);
 process.exit(fail ? 1 : 0);

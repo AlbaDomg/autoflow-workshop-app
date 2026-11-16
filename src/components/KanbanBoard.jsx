@@ -228,7 +228,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                 <div className="card-details">
                   <span>Matrícula: {order.vehicle.licensePlate}</span>
                   <span>Ingreso: {order.vehicle.entryDate}</span>
-                  <span style={{ color: 'var(--color-warning)' }}>⚠️ {order.problemDescription.substring(0, 50)}...</span>
+                  <span style={{ color: 'var(--color-warning)', lineHeight: '1.35' }}>⚠️ {order.problemDescription}</span>
                 </div>
                 
                 {order.diagnosisText ? (

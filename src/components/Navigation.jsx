@@ -82,23 +82,6 @@ export default function Navigation() {
       </nav>
 
       <div className="header-quick-actions">
-        {/* Acceso Directo al Simulador de Chat WhatsApp */}
-        <button
-          type="button"
-          className={`nav-wa-btn ${isWaDrawerOpen ? 'active' : ''}`}
-          onClick={() => {
-            if (!isWaDrawerOpen) {
-              openWhatsAppChat();
-            } else {
-              setIsWaDrawerOpen(false);
-            }
-          }}
-          title="Abrir Simulador Visual de Chat de WhatsApp"
-        >
-          <span>💬</span>
-          <span className="nav-wa-text">WhatsApp</span>
-        </button>
-
         {/* Campana de Notificaciones */}
         <div className="bell-container">
           <button 
