@@ -28,7 +28,7 @@ export default function Navigation() {
   };
 
   return (
-    <header className="app-header glass-panel">
+    <div className="top-header-bar">
       <div className="logo-container" onClick={() => setActiveTab('kanban')} style={{ cursor: 'pointer' }} title="Talleres Naranjo">
         <img
           src="/logo-talleres-naranjo.png"
@@ -36,8 +36,9 @@ export default function Navigation() {
           className="brand-logo-img"
         />
       </div>
-      
-      <nav className="nav-tabs">
+
+      <header className="app-header glass-panel">
+        <nav className="nav-tabs">
         <button
           className={`nav-tab ${activeTab === 'kanban' ? 'active' : ''}`}
           onClick={() => setActiveTab('kanban')}
@@ -146,6 +147,7 @@ export default function Navigation() {
           )}
         </div>
       </div>
-    </header>
+      </header>
+    </div>
   );
 }
