@@ -833,9 +833,9 @@ export const WorkshopProvider = ({ children }) => {
 REGLAS ESTRICTAS DE INTERACCIÓN:
 1. Este cliente YA ESTÁ IDENTIFICADO y su DNI (${matchedClient.dniNif}) y teléfono (${matchedClient.phone}) ya constan en su ficha técnica y en este mensaje. TIENES TERMINANTEMENTE PROHIBIDO VOLVER A PEDIR SU DNI, NIF, TELÉFONO O CONFIRMAR DATOS PERSONALES.
 2. Si el cliente indica el motivo de la avería o revisión, genera INMEDIATAMENTE la tarjeta de recepción usando su teléfono registrado (${matchedClient.phone}). Sus kilómetros ya están registrados (${activeVehicle.mileage || 55000} km), así que NO le vuelvas a pedir el kilometraje ni datos que ya constan en su ficha.
-3. REGLA CRÍTICA DE GOOGLE CALENDAR Y HORARIO (LUNES A VIERNES DE 08:00 A 16:00):
-   - Los eventos que devuelve Consultar_Citas_Calendar son CITAS YA OCUPADAS POR OTROS COCHES (PROHIBIDAS).
-   - REGLA OBLIGATORIA AL PROPONER HORAS DE UN DÍA: Si Consultar_Citas_Calendar devuelve eventos ese día (por ejemplo a las 09:00 y a las 14:00), DEBES nombrarlas primero como OCUPADAS y luego ofrecer horas distintas: "Para ese día ya tenemos ocupadas las [horas del nodo], pero tengo hueco libre a las [otras horas entre 08:00 y 16:00 distintas a esas]". Si no devuelve ningún evento, ofrece por ejemplo las 09:00, 11:00 o 13:00.
+3. REGLA CRÍTICA DE GOOGLE CALENDAR Y HORARIO (LUNES A VIERNES DE 08:00 A 16:00, CITAS DE 30 MINUTOS):
+   - Cada cita de recepción dura 30 MINUTOS (tramos posibles: 08:00, 08:30, 09:00, 09:30, 10:00, 10:30, 11:00, 11:30, 12:00, 12:30, 13:00, 13:30, 14:00, 14:30, 15:00, 15:30, 16:00). Al crear el evento en Google Calendar, pon siempre la hora de fin (End) 30 minutos después de la hora de inicio (Start).
+   - Los eventos que devuelve Consultar_Citas_Calendar son HORAS YA OCUPADAS (PROHIBIDAS). Descarta esas horas EN SILENCIO (no le cuentes al cliente qué horas tienen cogidas otros clientes) y ofrécele únicamente 2 o 3 tramos que NO aparezcan en Consultar_Citas_Calendar. Solo di que una hora está ocupada si el cliente pide específicamente esa hora exacta.
    - TIENES TERMINANTEMENTE PROHIBIDO ofrecer o agendar citas después de las 16:00 (17:00, 18:00, 19:00 están fuera de horario) ni en sábado o domingo.`;
       } else if (hasMultipleVehicles) {
         const vehiclesList = clientVehicles.map((v, i) => `${i + 1}) ${v.brand} ${v.model} (matrícula: ${v.licensePlate})`).join(', ');
