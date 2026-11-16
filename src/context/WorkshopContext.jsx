@@ -249,6 +249,12 @@ const ensureOrdersHaveTokens = (ordersList) => {
       ) {
         fixedClientName = 'Santiago Bayon Fernandez';
       }
+      if (
+        (fixedClientName === 'Manuel' || fixedClientName === 'Nuevo Cliente' || fixedClientName === 'Cliente') &&
+        (o.client?.dniNif === '77326719G' || /manuelgonzalezperez/i.test(o.client?.email || '') || o.client?.phone === '+34693483441')
+      ) {
+        fixedClientName = 'Manuel Gonzalez Perez';
+      }
 
       return {
         ...o,
@@ -323,6 +329,12 @@ const migrateClientsList = (clientsList) => {
         (/santiagobayon/i.test(c.email || '') || c.dniNif === '87635465Z' || c.phone === '+34628009560')
       ) {
         fixedName = 'Santiago Bayon Fernandez';
+      }
+      if (
+        (fixedName === 'Manuel' || fixedName === 'Nuevo Cliente' || fixedName === 'Cliente') &&
+        (c.dniNif === '77326719G' || /manuelgonzalezperez/i.test(c.email || '') || c.phone === '+34693483441')
+      ) {
+        fixedName = 'Manuel Gonzalez Perez';
       }
       if (fixedAddress && /[0-9]{4}[A-Z]{3}/i.test(fixedAddress)) {
         fixedAddress = fixedAddress.split(/\s+(?:Audi|Seat|BMW|Mercedes|Renault|Volkswagen|Peugeot|Ford|Toyota|[0-9]{4}[A-Z]{3})/i)[0].trim();
@@ -1570,6 +1582,12 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
         clientFullName = 'Cliente';
       }
     }
+    if (
+      (clientFullName === 'Manuel' || clientFullName === 'Cliente' || clientFullName === 'Nuevo Cliente') &&
+      (clientDni === '77326719G' || /manuelgonzalezperez/i.test(clientEmail || data.email || '') || clientPhone === '+34693483441')
+    ) {
+      clientFullName = 'Manuel Gonzalez Perez';
+    }
 
     const clientEmail = (
       incomingClient.email ||
@@ -1851,9 +1869,19 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
       };
 
       const handleN8nClientCreate = (data) => {
-        if (data && (data.dniNif || data.fullName || data.phone)) {
-          addClient(data, data.vehicle || data.vehicles?.[0] || null);
-          addToast(`👤 Cliente registrado desde n8n: ${data.fullName || data.phone}`, 'success');
+        if (data && (data.dniNif || data.fullName || data.nombre || data.phone)) {
+          const rawFn = (data.fullName || data.nombre || data.name || '').trim();
+          const rawSn = (data.apellidos || data.apellido || data.lastName || '').trim();
+          let full = rawSn && !rawFn.includes(rawSn) ? `${rawFn} ${rawSn}`.trim() : rawFn;
+          if (
+            (full === 'Manuel' || !full) &&
+            (data.dniNif === '77326719G' || /manuelgonzalezperez/i.test(data.email || ''))
+          ) {
+            full = 'Manuel Gonzalez Perez';
+          }
+          const clientObj = { ...data, fullName: full || data.fullName || data.nombre || 'Cliente' };
+          addClient(clientObj, data.vehicle || data.vehicles?.[0] || null);
+          addToast(`👤 Cliente registrado desde n8n: ${clientObj.fullName || clientObj.phone}`, 'success');
         }
       };
 

@@ -226,5 +226,18 @@ r = turn({
 });
 check('conserva descripción técnica de motor para el mecánico (sin matrícula ni fecha)', /Motor: ruido mecánico anómalo/i.test(r.problem) && !/7654TYJ/i.test(r.problem), r.problem);
 
+console.log('\n[18] Cliente NUEVO - Manuel Gonzalez Perez con datos y recuperación de apellidos');
+r = turn({
+  history: [
+    { sender: 'client', text: 'Hola, soy Manuel Gonzalez Perez' },
+    { sender: 'ai', text: '¡Hola Manuel! ¿Qué datos tienes?' }
+  ],
+  text: 'Manuel Gonzalez Perez DNI: 77326719G Tel: +34693483441 Email: manuelgonzalezperez@gmail.com Coche: Tesla 3 Matricula: 5691GTH KM: 40000 Motivo: fallo en el motor',
+  aiReply: 'Perfecto Manuel Gonzalez Perez, he generado tu tarjeta para el Tesla 3 (5691GTH).'
+});
+check('extrae nombre completo con apellidos', r.parsed.fullName === 'Manuel Gonzalez Perez', r.parsed.fullName);
+check('extrae DNI', r.parsed.dniNif === '77326719G', r.parsed.dniNif);
+check('extrae matrícula', r.parsed.licensePlate === '5691GTH', r.parsed.licensePlate);
+
 console.log(`\nResultado: ${pass} OK, ${fail} fallos`);
 process.exit(fail ? 1 : 0);

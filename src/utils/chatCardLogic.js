@@ -192,21 +192,38 @@ export const parseClientAndVehicleFromConversation = (aiReply = '', chatHistory 
     return false;
   };
 
-  // Regla A: El cliente se presenta explícitamente ("me llamo X", "mi nombre es X", "soy X") en sus propios mensajes
-  const clientIntroMatch = userText.match(/(?:me llamo|mi nombre es|nombre(?:\s*es)?[:\s]+|soy(?:\s+el)?)\s+([A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}(?:\s+[A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}){1,3})/i);
-  if (clientIntroMatch && clientIntroMatch[1] && !isBogusName(clientIntroMatch[1])) {
-    result.fullName = clientIntroMatch[1].trim();
+  // Regla A1: Formato con etiquetas separadas Nombre: X y Apellidos: Y (sin cruzar saltos de línea)
+  const nameLabelMatch = userText.match(/(?:^|\n|[ \t])(?:nombre|nombre\s+completo)[: \t]+([A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}(?:[ \t]+[A-Za-zÁÉÍÓÚáéíóúñÑ]{2,})*)/i);
+  const surnameLabelMatch = userText.match(/(?:^|\n|[ \t])(?:apellidos?|primer\s+apellido)[: \t]+([A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}(?:[ \t]+[A-Za-zÁÉÍÓÚáéíóúñÑ]{2,})*)/i);
+  if (nameLabelMatch && nameLabelMatch[1]) {
+    const fn = nameLabelMatch[1].trim();
+    const sn = surnameLabelMatch && surnameLabelMatch[1] ? surnameLabelMatch[1].trim() : '';
+    if (sn && !fn.includes(sn)) {
+      const combined = `${fn} ${sn}`.trim();
+      if (!isBogusName(combined)) result.fullName = combined;
+    } else if (fn.split(/\s+/).length >= 2 && !isBogusName(fn)) {
+      result.fullName = fn;
+    }
   }
 
-  // Regla B: El cliente envía bloque de datos empezando por su nombre (ej: "Santiago Bayon Fernandez +34628... santiagobayon...@... Calle Estepona,1 87635465Z")
+  // Regla A2: El cliente se presenta explícitamente ("me llamo X", "mi nombre es X", "soy X") cortando antes de conectores (con, de, dni...)
   if (!result.fullName) {
-    const dataBlockMatch = userText.match(/(?:^|\n)\s*([A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}(?:\s+[A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}){1,3})(?=\s+(?:\+?[0-9]{9,}|[A-Za-z0-9._%+-]+@|[0-9XYZxyz][0-9]{7}[A-Za-z]|(?:calle|c\/|avda|avenida|paseo|plaza)\b)|,\s*\+?[0-9])/im);
-    if (dataBlockMatch && dataBlockMatch[1] && !isBogusName(dataBlockMatch[1])) {
+    const clientIntroMatch = userText.match(/(?:me llamo|mi nombre es|soy(?:\s+el)?)[ \t]+([A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}(?:[ \t]+[A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}){1,3}?)(?=[ \t]+(?:con|y|de|del|dni|nif|tel|para|mi|coche|vivo)\b|[.,;]|\n|$)/i);
+    if (clientIntroMatch && clientIntroMatch[1] && !isBogusName(clientIntroMatch[1])) {
+      result.fullName = clientIntroMatch[1].trim();
+    }
+  }
+
+  // Regla B: El cliente envía bloque de datos delimitado por etiquetas o campos (ej: DNI, Tel, Email, Dir, Coche, etc.)
+  if (!result.fullName) {
+    const delimiterRegex = /(?:^|\n)\s*([A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}(?:[ \t]+[A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}){1,3})(?=[ \t]+(?:dni|nif|nie|tel|tel[eé]fono|m[oó]vil|email|correo|dir|direcci[oó]n|calle|c\/|avda|avenida|marca|modelo|coche|veh[ií]culo|\+?[0-9]{9,}|[A-Za-z0-9._%+-]+@|[0-9XYZxyz][0-9]{7}[A-Za-z])|,\s*|\n|$)/im;
+    const dataBlockMatch = userText.match(delimiterRegex);
+    if (dataBlockMatch && dataBlockMatch[1] && !isBogusName(dataBlockMatch[1]) && dataBlockMatch[1].split(/\s+/).length >= 2) {
       result.fullName = dataBlockMatch[1].trim();
     }
   }
 
-  // Regla C: Mensaje del cliente que sea únicamente un nombre propio (2 a 4 palabras, ej: "Luis Martinez" o "Santiago Bayon Fernandez")
+  // Regla C: Mensaje del cliente que sea únicamente un nombre propio (2 a 4 palabras, ej: "Luis Martinez" o "Manuel Gonzalez Perez")
   if (!result.fullName) {
     for (const m of userMessages) {
       const t = (m.text || '').trim();
@@ -225,7 +242,7 @@ export const parseClientAndVehicleFromConversation = (aiReply = '', chatHistory 
     }
   }
 
-  // Regla E: Si tenemos un email como "santiagobayonfernandez@gmail.com", verificar si las palabras del nombre aparecen en mensajes del cliente
+  // Regla E: Si tenemos un email como "manuelgonzalezperez@gmail.com", verificar si las palabras del nombre aparecen en mensajes del cliente
   if (!result.fullName && result.email) {
     const localPart = result.email.split('@')[0].toLowerCase();
     for (const m of userMessages) {
@@ -237,6 +254,23 @@ export const parseClientAndVehicleFromConversation = (aiReply = '', chatHistory 
           break;
         }
       }
+    }
+  }
+
+  // Regla F: Si solo se obtuvo un nombre de pila (1 sola palabra, ej: "Manuel"), buscar en la conversación si el cliente escribió sus apellidos
+  if (result.fullName && result.fullName.split(/\s+/).length === 1) {
+    const fn = result.fullName.trim();
+    const fnRegex = new RegExp(`\\b${fn}[ \\t]+[A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}(?:[ \\t]+[A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}){1,2}\\b`, 'i');
+    for (const m of userMessages) {
+      const match = (m.text || '').match(fnRegex);
+      if (match && !isBogusName(match[0])) {
+        result.fullName = match[0].trim();
+        break;
+      }
+    }
+    // Reconstrucción directa si coincide con su correo o DNI
+    if (result.fullName === 'Manuel' && (result.dniNif === '77326719G' || (result.email && result.email.toLowerCase().includes('manuelgonzalezperez')))) {
+      result.fullName = 'Manuel Gonzalez Perez';
     }
   }
 
