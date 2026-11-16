@@ -2,29 +2,45 @@ import { getNotificationsDb, saveNotificationsDb, isCloudDbActive } from './_db.
 
 function mergeNotificationsLists(localList = [], dbList = []) {
   const map = new Map();
-  // Primero procesar dbList
-  for (const item of dbList) {
-    if (item && item.message) {
-      const key = item.id || item.message;
-      map.set(key, item);
-    }
-  }
-  // Luego localList (si coincide id/message, prioriza read: true si alguno lo leyó)
-  for (const item of localList) {
-    if (item && item.message) {
-      const key = item.id || item.message;
-      if (map.has(key)) {
-        const existing = map.get(key);
-        map.set(key, {
-          ...existing,
-          ...item,
-          read: Boolean(existing.read || item.read)
-        });
-      } else {
-        map.set(key, item);
+  const excerptMap = new Map();
+
+  const processItem = (item) => {
+    if (!item || !item.message) return;
+    let cleanMsg = String(item.message).replace(/asistente de Talleres Naranjo/g, 'Santiago Bayon Fernandez');
+    const sanitizedItem = { ...item, message: cleanMsg };
+    const exc = (cleanMsg.match(/«([^»]+)»/) || [])[1];
+
+    if (exc) {
+      if (excerptMap.has(exc)) {
+        const prevKey = excerptMap.get(exc);
+        const prevItem = map.get(prevKey);
+        if (cleanMsg.length > prevItem.message.length || (!prevItem.message.includes('—') && cleanMsg.includes('—'))) {
+          map.delete(prevKey);
+          const key = sanitizedItem.id || cleanMsg;
+          map.set(key, { ...prevItem, ...sanitizedItem, read: Boolean(prevItem.read || sanitizedItem.read) });
+          excerptMap.set(exc, key);
+        } else {
+          map.set(prevKey, { ...prevItem, read: Boolean(prevItem.read || sanitizedItem.read) });
+        }
+        return;
       }
+      const key = sanitizedItem.id || cleanMsg;
+      map.set(key, sanitizedItem);
+      excerptMap.set(exc, key);
+      return;
     }
-  }
+
+    const key = sanitizedItem.id || cleanMsg;
+    if (map.has(key)) {
+      const existing = map.get(key);
+      map.set(key, { ...existing, ...sanitizedItem, read: Boolean(existing.read || sanitizedItem.read) });
+    } else {
+      map.set(key, sanitizedItem);
+    }
+  };
+
+  for (const item of dbList) processItem(item);
+  for (const item of localList) processItem(item);
 
   return Array.from(map.values())
     .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
@@ -42,6 +58,9 @@ export default async function handler(req, res) {
 
   try {
     let notifications = await getNotificationsDb();
+    if (Array.isArray(notifications)) {
+      notifications = mergeNotificationsLists([], notifications);
+    }
 
     if (req.method === 'POST') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
@@ -95,8 +114,9 @@ export default async function handler(req, res) {
       }
 
       // 5. Inserción individual (ej: desde n8n, webhook externo o llamada directa)
-      const message = String(body.message || body.notification?.message || '').trim();
+      let message = String(body.message || body.notification?.message || '').trim();
       if (message) {
+        message = message.replace(/asistente de Talleres Naranjo/g, 'Santiago Bayon Fernandez');
         const type = body.type || body.notification?.type || 'info';
         const newNotif = {
           id: body.id || `NOTIF-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -106,9 +126,22 @@ export default async function handler(req, res) {
           createdAt: body.createdAt || new Date().toISOString()
         };
 
-        // Evitar duplicar si ya existe el mismo mensaje exacto en las últimas
-        const exists = notifications.some(n => n.message === message || n.id === newNotif.id);
-        if (!exists) {
+        const excerptMatch = message.match(/«([^»]+)»/);
+        const excerpt = excerptMatch ? excerptMatch[1] : '';
+        const existingIdx = excerpt
+          ? notifications.findIndex(n => n.message === message || n.id === newNotif.id || (n.message && n.message.includes(excerpt)))
+          : notifications.findIndex(n => n.message === message || n.id === newNotif.id);
+
+        if (existingIdx >= 0) {
+          if (message.length > notifications[existingIdx].message.length || (!notifications[existingIdx].message.includes('—') && message.includes('—'))) {
+            notifications[existingIdx] = {
+              ...notifications[existingIdx],
+              message,
+              type
+            };
+            await saveNotificationsDb(notifications);
+          }
+        } else {
           notifications = [newNotif, ...notifications].slice(0, 100);
           await saveNotificationsDb(notifications);
         }

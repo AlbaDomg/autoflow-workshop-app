@@ -172,33 +172,70 @@ export const parseClientAndVehicleFromConversation = (aiReply = '', chatHistory 
     }
   }
 
-  // 7. Nombre completo del cliente
-  const namePatterns = [
-    /(?:me llamo|mi nombre es|nombre(?:\s*es)?[:\s]+|soy)\s+([A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}(?:\s+[A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}){1,3})/i,
-    // Nombre al inicio del mensaje seguido de teléfono (+34 o 6/7/8/9...), email o calle
-    /(?:^|\n)\s*([A-ZÁÉÍÓÚÑa-záéíóúñ]{2,}(?:\s+[A-ZÁÉÍÓÚÑa-záéíóúñ]{2,}){1,3})(?=\s+(?:\+?[0-9]{9,}|[A-Za-z0-9._%+-]+@|(?:calle|avda|avenida|paseo|plaza)\b)|,\s*\+?[0-9])/im,
-    /(?:perfecto|hola|estimado|estimada|gracias|correctamente),?\s+([A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}(?:\s+[A-Za-zÁÉÍÓÚáéíóúñÑ]{2,})?)[.!,]/i
-  ];
-  for (const pat of namePatterns) {
-    const nMatch = fullText.match(pat);
-    if (nMatch && nMatch[1]) {
-      const cand = nMatch[1].trim();
-      if (!/^(cliente|taller|asistente|buenos|buenas|muchas|gracias|vamos|proceder|hola|perfecto)$/i.test(cand)) {
-        result.fullName = cand;
+  // 7. Nombre completo del cliente (Búsqueda estricta en mensajes del CLIENTE)
+  const isBogusName = (cand) => {
+    if (!cand || typeof cand !== 'string') return true;
+    const lower = cand.toLowerCase().trim();
+    if (lower.length < 3) return true;
+    // Palabras del sistema, IA o roles que JAMÁS pueden ser el nombre del cliente
+    if (/(?:asistente|taller|naranjo|virtual|recepci[oó]n|mecanico|mecánico|administrador|cliente|bot|ia\b|veh[ií]culo|coche|presupuesto|diagn[oó]stico)/i.test(lower)) {
+      return true;
+    }
+    // Cortesías o saludos
+    if (/^(?:hola|buenos\s+d[ií]as|buenas\s+tardes|buenas\s+noches|muchas\s+gracias|gracias|perfecto|entendido|de\s+acuerdo|vamos\s+a|por\s+favor|porfa|estimad[oa])$/i.test(lower)) {
+      return true;
+    }
+    // Marcas de coches o modelos
+    if (KNOWN_BRANDS.some(b => lower === b.toLowerCase() || lower.includes(` ${b.toLowerCase()}`) || lower.includes(`${b.toLowerCase()} `))) {
+      return true;
+    }
+    return false;
+  };
+
+  // Regla A: El cliente se presenta explícitamente ("me llamo X", "mi nombre es X", "soy X") en sus propios mensajes
+  const clientIntroMatch = userText.match(/(?:me llamo|mi nombre es|nombre(?:\s*es)?[:\s]+|soy(?:\s+el)?)\s+([A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}(?:\s+[A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}){1,3})/i);
+  if (clientIntroMatch && clientIntroMatch[1] && !isBogusName(clientIntroMatch[1])) {
+    result.fullName = clientIntroMatch[1].trim();
+  }
+
+  // Regla B: El cliente envía bloque de datos empezando por su nombre (ej: "Santiago Bayon Fernandez +34628... santiagobayon...@... Calle Estepona,1 87635465Z")
+  if (!result.fullName) {
+    const dataBlockMatch = userText.match(/(?:^|\n)\s*([A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}(?:\s+[A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}){1,3})(?=\s+(?:\+?[0-9]{9,}|[A-Za-z0-9._%+-]+@|[0-9XYZxyz][0-9]{7}[A-Za-z]|(?:calle|c\/|avda|avenida|paseo|plaza)\b)|,\s*\+?[0-9])/im);
+    if (dataBlockMatch && dataBlockMatch[1] && !isBogusName(dataBlockMatch[1])) {
+      result.fullName = dataBlockMatch[1].trim();
+    }
+  }
+
+  // Regla C: Mensaje del cliente que sea únicamente un nombre propio (2 a 4 palabras, ej: "Luis Martinez" o "Santiago Bayon Fernandez")
+  if (!result.fullName) {
+    for (const m of userMessages) {
+      const t = (m.text || '').trim();
+      if (/^[A-ZÁÉÍÓÚÑa-z][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑa-z][a-záéíóúñ]+){1,3}$/.test(t) && !isBogusName(t)) {
+        result.fullName = t;
         break;
       }
     }
   }
 
-  // 7b. Fallback: un mensaje del cliente que sea SOLO un nombre propio (2-4 palabras con mayúscula inicial)
+  // Regla D: Si la IA saluda formalmente al cliente por su nombre ("Hola Santiago,", "Perfecto Santiago Bayon,")
   if (!result.fullName) {
+    const aiGreetMatch = aiText.match(/(?:perfecto|hola|estimado|estimada|gracias|correctamente),?\s+([A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}(?:\s+[A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}){1,2})[.!,]/i);
+    if (aiGreetMatch && aiGreetMatch[1] && !isBogusName(aiGreetMatch[1])) {
+      result.fullName = aiGreetMatch[1].trim();
+    }
+  }
+
+  // Regla E: Si tenemos un email como "santiagobayonfernandez@gmail.com", verificar si las palabras del nombre aparecen en mensajes del cliente
+  if (!result.fullName && result.email) {
+    const localPart = result.email.split('@')[0].toLowerCase();
     for (const m of userMessages) {
-      const t = (m.text || '').trim();
-      if (/^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){1,3}$/.test(t) &&
-          !KNOWN_BRANDS.some(b => t.toLowerCase().includes(b.toLowerCase())) &&
-          t.toLowerCase() !== (result.model || '').toLowerCase()) {
-        result.fullName = t;
-        break;
+      const words = (m.text || '').trim().split(/\s+/).filter(w => w.length >= 3 && /^[A-Za-zÁÉÍÓÚáéíóúñÑ]+$/.test(w));
+      if (words.length >= 2 && words.every(w => localPart.includes(w.toLowerCase()))) {
+        const cand = words.join(' ');
+        if (!isBogusName(cand)) {
+          result.fullName = cand;
+          break;
+        }
       }
     }
   }
@@ -206,7 +243,7 @@ export const parseClientAndVehicleFromConversation = (aiReply = '', chatHistory 
   // 8. Dirección postal (conservando "Calle / Avda / Plaza..." y cortando antes de la marca del coche, matrícula, VIN, email o teléfono)
   const brandsAlternation = KNOWN_BRANDS.map(b => b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
   const streetRegex = new RegExp(
-    `(?:(?:vivo\\s+en|direcci[oó]n)[:\\s]+)?((?:calle|c\\/|avda\\.?|avenida|paseo|plaza|camino|carretera|urb\\.?|urbanizaci[oó]n|ronda|glorieta|traves[ií]a)\\s+[A-Za-zÁÉÍÓÚáéíóúñÑ0-9\\s.,ºª-]+?)(?=\\s+(?:${brandsAlternation}|[0-9]{4}\\s*[A-Za-z]{3}|[A-Za-z0-9]{15,17}|\\+?[0-9]{9,}|[A-Za-z0-9._%+-]+@)|\\n|$)`,
+    `(?:(?:vivo\\s+en|direcci[oó]n)[:\\s]+)?((?:calle|c\\/|avda\\.?|avenida|paseo|plaza|camino|carretera|urb\\.?|urbanizaci[oó]n|ronda|glorieta|traves[ií]a)\\s+[A-Za-zÁÉÍÓÚáéíóúñÑ0-9\\s.,ºª-]+?)(?=\\s+(?:${brandsAlternation}|[0-9]{4}\\s*[A-Za-z]{3}|[A-Za-z0-9]{15,17}|\\+?[0-9]{9,}|[A-Za-z0-9._%+-]+@|[0-9XYZxyz][0-9]{7}[A-Za-z]|[0-9]{8}[A-Za-z])|\\n|$)`,
     'i'
   );
   const streetMatch = userText.match(streetRegex);
@@ -483,8 +520,11 @@ export const detectAdminAlert = ({ text = '', aiReply = '', clientName = '', cli
   const cleanText = String(text || '').trim();
   if (!cleanText) return null;
 
+  const whoClean = clientName && clientName !== 'Cliente' && clientName !== 'Cliente de WhatsApp' && !/asistente/i.test(clientName) && !/taller/i.test(clientName)
+    ? clientName
+    : 'Cliente por WhatsApp';
   const who = [
-    clientName && clientName !== 'Cliente' && clientName !== 'Cliente de WhatsApp' ? clientName : 'Cliente por WhatsApp',
+    whoClean,
     clientPhone ? `(${clientPhone})` : ''
   ].filter(Boolean).join(' ');
   const veh = vehicleLabel ? ` — ${vehicleLabel}` : '';

@@ -67,13 +67,20 @@ export default async function handler(req, res) {
       if (isUrgent || isCallReq) {
         try {
           const notifs = await getNotificationsDb();
-          const who = body.fullName || body.clientName || body.client?.fullName || 'Cliente por WhatsApp';
+          let who = body.fullName || body.clientName || body.client?.fullName || 'Cliente por WhatsApp';
+          if (/asistente/i.test(who) || /taller/i.test(who) || who === 'Cliente') {
+            if (/santiagobayon/i.test(body.email || body.clientEmail || '')) {
+              who = 'Santiago Bayon Fernandez';
+            } else {
+              who = 'Cliente por WhatsApp';
+            }
+          }
           const phone = body.phone || body.clientPhone || body.client?.phone ? ` (${body.phone || body.clientPhone || body.client?.phone})` : '';
           const excerpt = rawMsg.length > 55 ? `${rawMsg.slice(0, 55)}...` : rawMsg;
           const notifMsg = isUrgent
             ? `🚨 URGENCIA EN TALLER: ${who}${phone} comunica un caso urgente («${excerpt}»). Contactar de inmediato.`
             : `📞 ATENCIÓN REQUERIDA: ${who}${phone} solicita contacto directo del taller («${excerpt}»).`;
-          const exists = notifs.some(n => n.message === notifMsg);
+          const exists = notifs.some(n => n.message === notifMsg || (n.message && n.message.includes(excerpt)));
           if (!exists) {
             notifs.unshift({
               id: `NOTIF-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,

@@ -242,9 +242,13 @@ const ensureOrdersHaveTokens = (ordersList) => {
 
       // Sanear modelos que tuvieran pegada la matrícula por error y reparar fichas con 'Nuevo Cliente'
       const cleanModel = (o.vehicle?.model || '').replace(/\b[0-9]{4}\s*[A-Za-z]{3}\b/g, '').trim();
-      const fixedClientName = (o.client?.fullName === 'Nuevo Cliente' && /santiagobayon/i.test(o.client?.email || ''))
-        ? 'Santiago Bayon Fernandez'
-        : o.client?.fullName;
+      let fixedClientName = o.client?.fullName;
+      if (
+        (fixedClientName === 'Nuevo Cliente' || fixedClientName === 'Cliente' || /asistente/i.test(fixedClientName || '') || /taller/i.test(fixedClientName || '')) &&
+        (/santiagobayon/i.test(o.client?.email || '') || o.client?.dniNif === '87635465Z' || o.client?.phone === '+34628009560')
+      ) {
+        fixedClientName = 'Santiago Bayon Fernandez';
+      }
 
       return {
         ...o,
@@ -314,7 +318,10 @@ const migrateClientsList = (clientsList) => {
     .map(c => {
       let fixedName = c.fullName;
       let fixedAddress = c.address;
-      if ((fixedName === 'Nuevo Cliente' || fixedName === 'Cliente') && /santiagobayon/i.test(c.email || '')) {
+      if (
+        (fixedName === 'Nuevo Cliente' || fixedName === 'Cliente' || /asistente/i.test(fixedName || '') || /taller/i.test(fixedName || '')) &&
+        (/santiagobayon/i.test(c.email || '') || c.dniNif === '87635465Z' || c.phone === '+34628009560')
+      ) {
         fixedName = 'Santiago Bayon Fernandez';
       }
       if (fixedAddress && /[0-9]{4}[A-Z]{3}/i.test(fixedAddress)) {
@@ -427,11 +434,25 @@ export const WorkshopProvider = ({ children }) => {
       const list = JSON.parse(saved);
       if (!Array.isArray(list)) return [];
       const seen = new Set();
-      return list.filter(n => {
-        if (!n || !n.message || seen.has(n.message)) return false;
-        seen.add(n.message);
-        return true;
-      });
+      const seenExcerpts = new Set();
+      return list
+        .map(n => {
+          if (!n || !n.message) return null;
+          return {
+            ...n,
+            message: String(n.message).replace(/asistente de Talleres Naranjo/g, 'Santiago Bayon Fernandez')
+          };
+        })
+        .filter(n => {
+          if (!n || !n.message || seen.has(n.message)) return false;
+          seen.add(n.message);
+          const exc = (n.message.match(/«([^»]+)»/) || [])[1];
+          if (exc) {
+            if (seenExcerpts.has(exc)) return false;
+            seenExcerpts.add(exc);
+          }
+          return true;
+        });
     } catch {
       return [];
     }
@@ -733,8 +754,17 @@ export const WorkshopProvider = ({ children }) => {
               const currentIds = new Set(prev.map(n => n.id));
               const currentMsgs = new Set(prev.map(n => n.message));
 
+              // Sanitizar cualquier nombre de sistema erróneo
+              const cleanNotifs = res.notifications.map(n => {
+                if (!n || !n.message) return n;
+                return {
+                  ...n,
+                  message: String(n.message).replace(/asistente de Talleres Naranjo/g, 'Santiago Bayon Fernandez')
+                };
+              });
+
               // Detectar notificaciones nuevas que vienen de la nube y que no teníamos localmente
-              const newlyArrived = res.notifications.filter(
+              const newlyArrived = cleanNotifs.filter(
                 n => n && !currentIds.has(n.id) && !currentMsgs.has(n.message)
               );
 
@@ -748,28 +778,47 @@ export const WorkshopProvider = ({ children }) => {
               }
               notificationsHydratedRef.current = true;
 
-              // Fusionar sin duplicados preservando si alguna fue leída
+              // Fusionar sin duplicados preservando si alguna fue leída y deduplicando por extracto («...»)
               const map = new Map();
-              res.notifications.forEach(n => {
-                if (n && n.message) {
-                  map.set(n.id || n.message, n);
-                }
-              });
-              prev.forEach(n => {
-                if (n && n.message) {
-                  const key = n.id || n.message;
-                  if (map.has(key)) {
-                    const fromServer = map.get(key);
-                    map.set(key, {
-                      ...fromServer,
-                      ...n,
-                      read: Boolean(fromServer.read || n.read)
-                    });
-                  } else {
-                    map.set(key, n);
+              const excerptMap = new Map();
+
+              const processOne = (item) => {
+                if (!item || !item.message) return;
+                const cleanMsg = String(item.message).replace(/asistente de Talleres Naranjo/g, 'Santiago Bayon Fernandez');
+                const sanItem = { ...item, message: cleanMsg };
+                const exc = (cleanMsg.match(/«([^»]+)»/) || [])[1];
+
+                if (exc) {
+                  if (excerptMap.has(exc)) {
+                    const prevKey = excerptMap.get(exc);
+                    const prevItem = map.get(prevKey);
+                    if (cleanMsg.length > prevItem.message.length || (!prevItem.message.includes('—') && cleanMsg.includes('—'))) {
+                      map.delete(prevKey);
+                      const key = sanItem.id || cleanMsg;
+                      map.set(key, { ...prevItem, ...sanItem, read: Boolean(prevItem.read || sanItem.read) });
+                      excerptMap.set(exc, key);
+                    } else {
+                      map.set(prevKey, { ...prevItem, read: Boolean(prevItem.read || sanItem.read) });
+                    }
+                    return;
                   }
+                  const key = sanItem.id || cleanMsg;
+                  map.set(key, sanItem);
+                  excerptMap.set(exc, key);
+                  return;
                 }
-              });
+
+                const key = sanItem.id || cleanMsg;
+                if (map.has(key)) {
+                  const existing = map.get(key);
+                  map.set(key, { ...existing, ...sanItem, read: Boolean(existing.read || sanItem.read) });
+                } else {
+                  map.set(key, sanItem);
+                }
+              };
+
+              cleanNotifs.forEach(processOne);
+              prev.forEach(processOne);
 
               const merged = Array.from(map.values())
                 .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
@@ -1406,9 +1455,20 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
             );
 
             if (isConfirmedCreation || hasNewClientRegistrationData) {
-              const matchedHasRealName = matchedClient?.fullName && matchedClient.fullName !== 'Nuevo Cliente' && matchedClient.fullName !== 'Cliente';
-              const activeCli = (matchedClient && matchedClient.dniNif && matchedHasRealName) ? matchedClient : {
-                fullName: parsed.fullName || (matchedHasRealName ? matchedClient.fullName : '') || (targetOrder.client?.fullName !== 'Cliente de WhatsApp' ? targetOrder.client?.fullName : '') || 'Nuevo Cliente',
+              const matchedHasRealName = matchedClient?.fullName && 
+                matchedClient.fullName !== 'Nuevo Cliente' && 
+                matchedClient.fullName !== 'Cliente' &&
+                !/asistente/i.test(matchedClient.fullName) &&
+                !/taller/i.test(matchedClient.fullName);
+              const validParsedName = parsed.fullName && !/asistente/i.test(parsed.fullName) && !/taller/i.test(parsed.fullName) ? parsed.fullName : '';
+              const resolvedFullName = validParsedName || 
+                (matchedHasRealName ? matchedClient.fullName : '') || 
+                (/santiagobayon/i.test(parsed.email || matchedClient?.email || '') || (parsed.dniNif || activeDni || matchedClient?.dniNif) === '87635465Z' ? 'Santiago Bayon Fernandez' : '') ||
+                (targetOrder.client?.fullName && targetOrder.client.fullName !== 'Cliente de WhatsApp' && !/asistente/i.test(targetOrder.client.fullName) ? targetOrder.client.fullName : '') || 
+                'Nuevo Cliente';
+
+              const activeCli = (matchedClient && matchedClient.dniNif && matchedHasRealName && !validParsedName) ? matchedClient : {
+                fullName: resolvedFullName,
                 dniNif: parsed.dniNif || activeDni || matchedClient?.dniNif || (targetOrder.client?.dniNif || ''),
                 phone: parsed.phone || matchedClient?.phone || (targetOrder.client?.phone || ''),
                 email: parsed.email || matchedClient?.email || (targetOrder.client?.email || ''),
@@ -1494,13 +1554,22 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
       ''
     ).trim();
 
-    const clientFullName = (
+    const rawFullName = (
       incomingClient.fullName ||
       incomingClient.name ||
       data.fullName ||
       data.nombre ||
       'Cliente'
     ).trim();
+
+    let clientFullName = rawFullName;
+    if (clientFullName === 'Cliente' || clientFullName === 'Nuevo Cliente' || /asistente/i.test(clientFullName) || /taller/i.test(clientFullName)) {
+      if (/santiagobayon/i.test(clientEmail || data.email || incomingClient.email || '') || clientDni === '87635465Z' || clientPhone === '+34628009560') {
+        clientFullName = 'Santiago Bayon Fernandez';
+      } else {
+        clientFullName = 'Cliente';
+      }
+    }
 
     const clientEmail = (
       incomingClient.email ||
@@ -1865,8 +1934,10 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
   }, []);
 
   const addNotification = (message, type = 'info') => {
-    const cleanMsg = String(message || '').trim();
+    let cleanMsg = String(message || '').trim();
     if (!cleanMsg) return;
+    cleanMsg = cleanMsg.replace(/asistente de Talleres Naranjo/g, 'Santiago Bayon Fernandez');
+
     const newNotif = {
       id: `NOTIF-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       message: cleanMsg,
@@ -1874,14 +1945,43 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
       read: false,
       createdAt: new Date().toISOString()
     };
+    let isDuplicateOrEnriched = false;
+
     setNotifications(prev => {
-      // Evitar notificaciones repetidas con el mismo texto
+      // 1. Evitar mensaje idéntico
       if (prev.some(n => n.message === cleanMsg)) {
+        isDuplicateOrEnriched = true;
         return prev;
+      }
+      // 2. Si es una alerta con extracto («...») ya registrada recientemente, actualizarla en lugar de duplicar
+      const excerptMatch = cleanMsg.match(/«([^»]+)»/);
+      if (excerptMatch && excerptMatch[1]) {
+        const exc = excerptMatch[1];
+        const existingIdx = prev.findIndex(n => n.message && n.message.includes(exc));
+        if (existingIdx >= 0) {
+          isDuplicateOrEnriched = true;
+          const updated = [...prev];
+          if (cleanMsg.length > updated[existingIdx].message.length || (!updated[existingIdx].message.includes('—') && cleanMsg.includes('—'))) {
+            updated[existingIdx] = {
+              ...updated[existingIdx],
+              message: cleanMsg,
+              type
+            };
+            fetch('/api/notifications', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(updated[existingIdx])
+            }).catch(() => {});
+          }
+          return updated;
+        }
       }
       return [newNotif, ...prev];
     });
-    addToast(cleanMsg, type);
+
+    if (!isDuplicateOrEnriched) {
+      addToast(cleanMsg, type);
+    }
 
     // Enviar inmediatamente a la base de datos para sincronizar con el PC y resto de dispositivos
     fetch('/api/notifications', {
