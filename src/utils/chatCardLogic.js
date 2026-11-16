@@ -6,8 +6,8 @@ export const isCourtesyText = (t) => {
   if (/^(si|sí|no|bien|vale|ok|okey|okay|porfa|por favor|gracias|genial|perfecto|listo)[\s.,!¡?]*$/i.test(clean)) return true;
   // Cortesías y despedidas en mensajes cortos (palabra completa), incluyendo "genial pasaré mañana", "vale paso mañana", etc.
   if (clean.length < 55 && /^(genial|gracias|muchas gracias|muchísimas gracias|perfecto|vale|ok|okey|okay|de nada|adios|adiós|hasta luego|hasta pronto|entendido|listo|de acuerdo|nos vemos|fenomenal|estupendo|estupenda|guay)(?![a-záéíóúñ])/i.test(clean)) return true;
-  // Confirmaciones de recogida del vehículo ("paso mañana", "pasaré mañana a buscarlo", "voy mañana a por él")
-  if (/\b(pasar[eé]|paso\s+mañana|paso\s+hoy|paso\s+el\s+|ir[eé]\s+mañana|voy\s+mañana|a\s+recogerlo|a\s+buscarlo|a\s+retirarlo)\b/i.test(clean)) return true;
+  // Confirmaciones o preguntas de recogida del vehículo ("cuándo puedo pasar a recogerlo", "pasaré mañana", "voy a por el coche")
+  if (/\b(pasar[eé]|paso\s+mañana|paso\s+hoy|paso\s+el\s+|ir[eé]\s+mañana|voy\s+mañana|recoger(lo)?|buscar(lo)?|retirar(lo)?|pasar\s+a\s+por|ir\s+a\s+por|ya\s+est[aá]\s+listo)\b/i.test(clean)) return true;
   // Fechas y horarios de cita
   if (/^(pasado mañana|mañana|hoy|el (lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)|a las \d+|el \d{1,2}\b|\d{1,2}[/:]\d{1,2})/i.test(clean)) return true;
   // Peticiones de cambio/cancelación de cita o llamada (no son averías mecánicas)
@@ -258,11 +258,11 @@ export const decideCardCreation = ({
 }) => {
   const replyLower = aiReply.toLowerCase();
 
-  // Detectar si esta conversación ya pasó por presupuesto o aviso de recogida de vehículo reparado
+  // Detectar si esta conversación ya pasó por presupuesto o aviso/consulta de recogida de vehículo reparado
   const allMsgs = [...(Array.isArray(chatHistory) ? chatHistory : []), { sender: 'ai', text: aiReply }];
   const historyHasPostReception = allMsgs.some(m =>
     m?.portalUrl ||
-    /\/portal\/|listo\s+para\s+ser\s+retirado|revisa\s+y\s+firma\s+digitalmente|importe\s+total\s+es\s+de/i.test(m?.text || '')
+    /\/portal\/|listo\s+para\s+ser\s+retirado|listo\s+para\s+retirar|revisa\s+y\s+firma\s+digitalmente|importe\s+total\s+es\s+de|pasar\s+a\s+(?:recoger|retirar|buscar)/i.test(m?.text || '')
   );
 
   // Si la orden ya está en fases posteriores del taller (Pendientes, En Proceso, Reparados, A Entregar)

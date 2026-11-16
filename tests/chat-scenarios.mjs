@@ -157,5 +157,13 @@ r = turn({
 });
 check('NO vuelve a crear tarjeta en Recepción', !r.decision.create);
 
+r = turn({
+  history: [{ sender: 'client', text: 'fallo de embrague' }],
+  text: 'cuando puedo pasar a recogerlo?',
+  aiReply: 'Puedes pasar a retirar tu vehículo de Lunes a Viernes de 08:00 a 16:00 sin necesidad de cita.',
+  vehicleKnown: q5
+});
+check('pregunta "cuando puedo pasar a recogerlo?" NO crea tarjeta en Recepción', !r.decision.create);
+
 console.log(`\nResultado: ${pass} OK, ${fail} fallos`);
 process.exit(fail ? 1 : 0);
