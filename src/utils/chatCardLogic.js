@@ -94,6 +94,15 @@ export const parseClientAndVehicleFromConversation = (aiReply = '', chatHistory 
     result.licensePlate = plateMatch[1].replace(/[\s-]/g, '').toUpperCase();
   }
 
+  // 4b. VIN / Bastidor (15 a 17 caracteres alfanuméricos con letras y números)
+  const vinTokens = userText.match(/\b([A-Za-z0-9]{15,17})\b/g) || [];
+  for (const tok of vinTokens) {
+    if (/[A-Za-z]/.test(tok) && /[0-9]/.test(tok) && !tok.includes('@')) {
+      result.vin = tok.toUpperCase();
+      break;
+    }
+  }
+
   // 5. Marca y Modelo de vehículo
   const KNOWN_BRANDS = [
     'Alfa Romeo', 'Aston Martin', 'Audi', 'BMW', 'Citroen', 'Citroën', 'Cupra',
@@ -111,9 +120,24 @@ export const parseClientAndVehicleFromConversation = (aiReply = '', chatHistory 
       const modelRegex = new RegExp(`\\b${b}\\s+([A-Za-z0-9áéíóúÁÉÍÓÚ+.-]+(?:\\s+[A-Za-z0-9áéíóúÁÉÍÓÚ+.-]+)?)`, 'i');
       const mMatch = fullText.match(modelRegex);
       if (mMatch && mMatch[1]) {
-        const candidate = mMatch[1].trim();
-        if (!/^(con|de|del|matricula|matrícula|para|por|en|y|es|km|kilometros)$/i.test(candidate)) {
-          result.model = candidate;
+        const rawWords = mMatch[1].trim().split(/\s+/);
+        const cleanWords = [];
+        for (const w of rawWords) {
+          const wClean = w.replace(/[.,;:]/g, '');
+          // Detenerse si la palabra ya es la matrícula, el VIN, un kilometraje o una preposición
+          if (
+            /^(con|de|del|matricula|matrícula|vin|bastidor|para|por|en|y|es|km|kms|kilometros|kilómetros)$/i.test(wClean) ||
+            /^[0-9]{4}[A-Za-z]{3}$/.test(wClean) ||
+            /^[A-Za-z]{1,2}[0-9]{4}[A-Za-z]{1,2}$/.test(wClean) ||
+            /^[A-Za-z0-9]{15,17}$/.test(wClean) ||
+            /^[0-9]{4,6}$/.test(wClean)
+          ) {
+            break;
+          }
+          cleanWords.push(wClean);
+        }
+        if (cleanWords.length > 0) {
+          result.model = cleanWords.join(' ');
         }
       }
       break;
@@ -129,31 +153,35 @@ export const parseClientAndVehicleFromConversation = (aiReply = '', chatHistory 
     if (!result.model && parts.length > 1) result.model = parts.slice(1).join(' ');
   }
 
-  // 6. Kilometraje
+  // 6. Kilometraje (con "km" o como número de 4 a 6 cifras suelto en el mensaje de datos)
   const kmRegex = /\b([0-9]{1,3}(?:\.[0-9]{3})+|[0-9]{2,6})\s*(?:km|kms|kilometros|kilómetros)\b/i;
   const kmMatch = fullText.match(kmRegex);
   if (kmMatch) {
     result.mileage = parseInt(kmMatch[1].replace(/\./g, ''), 10) || 0;
   } else {
-    for (const m of userMessages) {
-      const pureNum = (m.text || '').trim().match(/^([0-9]{4,6})$/);
-      if (pureNum) {
-        result.mileage = parseInt(pureNum[1], 10);
-        break;
-      }
+    const numCandidates = userText.match(/(?:^|\s)([1-9][0-9]{3,5})(?=\s|$|[.,])/g) || [];
+    for (const rawNum of numCandidates) {
+      const n = rawNum.trim();
+      if (result.phone && result.phone.includes(n)) continue;
+      if (result.dniNif && result.dniNif.includes(n)) continue;
+      if (result.licensePlate && result.licensePlate.includes(n)) continue;
+      result.mileage = parseInt(n, 10) || 0;
+      break;
     }
   }
 
   // 7. Nombre completo del cliente
   const namePatterns = [
     /(?:me llamo|mi nombre es|nombre(?:\s*es)?[:\s]+|soy)\s+([A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}(?:\s+[A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}){1,3})/i,
-    /(?:perfecto|hola|estimado|estimada|gracias),?\s+([A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}(?:\s+[A-Za-zÁÉÍÓÚáéíóúñÑ]{2,})?)[.!,]/i
+    // Nombre al inicio del mensaje seguido de teléfono (+34 o 6/7/8/9...), email o calle
+    /(?:^|\n)\s*([A-ZÁÉÍÓÚÑa-záéíóúñ]{2,}(?:\s+[A-ZÁÉÍÓÚÑa-záéíóúñ]{2,}){1,3})(?=\s+(?:\+?[0-9]{9,}|[A-Za-z0-9._%+-]+@|(?:calle|avda|avenida|paseo|plaza)\b)|,\s*\+?[0-9])/im,
+    /(?:perfecto|hola|estimado|estimada|gracias|correctamente),?\s+([A-Za-zÁÉÍÓÚáéíóúñÑ]{2,}(?:\s+[A-Za-zÁÉÍÓÚáéíóúñÑ]{2,})?)[.!,]/i
   ];
   for (const pat of namePatterns) {
     const nMatch = fullText.match(pat);
     if (nMatch && nMatch[1]) {
       const cand = nMatch[1].trim();
-      if (!/^(cliente|taller|asistente|buenos|buenas|muchas|gracias|vamos|proceder)$/i.test(cand)) {
+      if (!/^(cliente|taller|asistente|buenos|buenas|muchas|gracias|vamos|proceder|hola|perfecto)$/i.test(cand)) {
         result.fullName = cand;
         break;
       }
@@ -173,10 +201,20 @@ export const parseClientAndVehicleFromConversation = (aiReply = '', chatHistory 
     }
   }
 
-  // 8. Dirección
-  const addrMatch = userText.match(/(?:vivo en|direccion|dirección|calle|avda|avenida)[:\s]+([^,\n]+(?:,\s*[^,\n]+)?)/i);
-  if (addrMatch && addrMatch[1]) {
-    result.address = addrMatch[1].trim();
+  // 8. Dirección postal (conservando "Calle / Avda / Plaza..." y cortando antes de la marca del coche, matrícula, VIN, email o teléfono)
+  const brandsAlternation = KNOWN_BRANDS.map(b => b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const streetRegex = new RegExp(
+    `(?:(?:vivo\\s+en|direcci[oó]n)[:\\s]+)?((?:calle|c\\/|avda\\.?|avenida|paseo|plaza|camino|carretera|urb\\.?|urbanizaci[oó]n|ronda|glorieta|traves[ií]a)\\s+[A-Za-zÁÉÍÓÚáéíóúñÑ0-9\\s.,ºª-]+?)(?=\\s+(?:${brandsAlternation}|[0-9]{4}\\s*[A-Za-z]{3}|[A-Za-z0-9]{15,17}|\\+?[0-9]{9,}|[A-Za-z0-9._%+-]+@)|\\n|$)`,
+    'i'
+  );
+  const streetMatch = userText.match(streetRegex);
+  if (streetMatch && streetMatch[1]) {
+    result.address = streetMatch[1].replace(/[,\s]+$/, '').trim();
+  } else {
+    const labeledAddr = userText.match(/(?:vivo\s+en|direcci[oó]n)[:\s]+([^,\n]+(?:,\s*\d+[A-Za-z]?)?)/i);
+    if (labeledAddr && labeledAddr[1]) {
+      result.address = labeledAddr[1].trim();
+    }
   }
 
   // 9. Motivo o problema (validado estrictamente como avería automotriz)

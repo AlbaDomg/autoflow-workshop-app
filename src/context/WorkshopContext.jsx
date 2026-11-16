@@ -162,9 +162,17 @@ const ensureOrdersHaveTokens = (ordersList) => {
         cleanProblem = 'Diagnóstico y revisión en taller';
       }
 
+      // Sanear modelos que tuvieran pegada la matrícula por error y reparar fichas con 'Nuevo Cliente'
+      const cleanModel = (o.vehicle?.model || '').replace(/\b[0-9]{4}\s*[A-Za-z]{3}\b/g, '').trim();
+      const fixedClientName = (o.client?.fullName === 'Nuevo Cliente' && /santiagobayon/i.test(o.client?.email || ''))
+        ? 'Santiago Bayon Fernandez'
+        : o.client?.fullName;
+
       return {
         ...o,
         problemDescription: cleanProblem,
+        client: o.client ? { ...o.client, fullName: fixedClientName } : o.client,
+        vehicle: o.vehicle ? { ...o.vehicle, model: cleanModel } : o.vehicle,
         assignedMechanics: Array.isArray(o.assignedMechanics) ? o.assignedMechanics : [],
         portalToken: o.portalToken || buildPortalToken(o.id, o.vehicle?.licensePlate),
         signature: o.signature || {
@@ -194,9 +202,20 @@ const migrateClientsList = (clientsList) => {
   return clientsList
     .filter(c => c && c.dniNif !== '48392019Z')
     .map(c => {
+      let fixedName = c.fullName;
+      let fixedAddress = c.address;
+      if ((fixedName === 'Nuevo Cliente' || fixedName === 'Cliente') && /santiagobayon/i.test(c.email || '')) {
+        fixedName = 'Santiago Bayon Fernandez';
+      }
+      if (fixedAddress && /[0-9]{4}[A-Z]{3}/i.test(fixedAddress)) {
+        fixedAddress = fixedAddress.split(/\s+(?:Audi|Seat|BMW|Mercedes|Renault|Volkswagen|Peugeot|Ford|Toyota|[0-9]{4}[A-Z]{3})/i)[0].trim();
+        if (/^estepona/i.test(fixedAddress)) fixedAddress = `Calle ${fixedAddress}`;
+      }
       if (Array.isArray(c.vehicles)) {
         return {
           ...c,
+          fullName: fixedName,
+          address: fixedAddress,
           vehicles: c.vehicles
             .filter(v => 
               v &&
@@ -204,14 +223,24 @@ const migrateClientsList = (clientsList) => {
               v.licensePlate !== '1234AGB'
             )
             .map(v => {
+              const cleanedModel = (v.model || '').replace(/\b[0-9]{4}\s*[A-Za-z]{3}\b/g, '').trim();
               if (v.licensePlate === '8465MGZ') {
                 return { ...v, brand: 'Audi', model: 'Q5' };
               }
-              return v;
+              if (v.licensePlate === '9876LMN') {
+                return {
+                  ...v,
+                  brand: v.brand || 'Audi',
+                  model: cleanedModel || 'Q5',
+                  vin: v.vin || 'VSSZZZ1K2V1234567',
+                  mileage: v.mileage || 55000
+                };
+              }
+              return { ...v, model: cleanedModel };
             })
         };
       }
-      return c;
+      return { ...c, fullName: fixedName, address: fixedAddress };
     });
 };
 
@@ -852,6 +881,9 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
         : 'CLIENTE NO IDENTIFICADO AÚN: Para comprobar si ya tiene ficha en Talleres Naranjo, solicita amablemente su número de DNI o NIF para consultar su historial en la base de datos (mediante /api/clients/search?dni=...). Si tras buscar por DNI no figura en el sistema, pídele amablemente todos sus datos obligatorios: DNI o NIF, Nombre completo, teléfono con prefijo, email, dirección, marca, modelo, matrícula, VIN, km y motivo para registrarlo.';
     }
 
+    // Regla universal de zona horaria de España (+01:00) para Google Calendar (evita el desfase de +1 hora por sufijo Z/UTC)
+    aiSystemInstruction += `\nREGLA OBLIGATORIA DE ZONA HORARIA EN GOOGLE CALENDAR: Al agendar citas en Google Calendar, los parámetros startTime y endTime DEBEN llevar siempre el sufijo de zona horaria de España "+01:00" (por ejemplo, si el cliente pide a las 11:30 del 17 de noviembre, envía exactamente "2026-11-17T11:30:00+01:00" como inicio y "2026-11-17T12:00:00+01:00" como fin). ¡PROHIBIDO terminar la fecha en "Z" (UTC), porque suma 1 hora de error!`;
+
     // Disparar al Webhook de n8n (para que el flujo de n8n + IA responda automáticamente)
     const chatHistory = [...(whatsappChats[targetOrder.id] || []), { sender: senderRole, text: text.trim() }];
     
@@ -1039,26 +1071,36 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
               addToast('🛟 La IA confirmó la tarjeta pero faltaban datos del vehículo: se ha creado igualmente. Revísala en Recepción.', 'warning');
             }
 
-            if (isConfirmedCreation) {
-              const activeCli = (matchedClient && matchedClient.dniNif) ? matchedClient : {
-                fullName: parsed.fullName || (targetOrder.client?.fullName !== 'Cliente de WhatsApp' ? targetOrder.client?.fullName : '') || 'Nuevo Cliente',
-                dniNif: parsed.dniNif || activeDni || (targetOrder.client?.dniNif || ''),
-                phone: parsed.phone || (targetOrder.client?.phone || ''),
-                email: parsed.email || (targetOrder.client?.email || ''),
-                address: parsed.address || (targetOrder.client?.address || 'Registrado por WhatsApp')
+            // Si el cliente nuevo acaba de facilitar todos sus datos personales y de vehículo (incluso antes de decir la avería), guardar/actualizar su ficha
+            const hasNewClientRegistrationData = Boolean(
+              parsed.fullName &&
+              (parsed.dniNif || activeDni) &&
+              (parsed.phone || parsed.email) &&
+              (parsed.brand || parsed.licensePlate)
+            );
+
+            if (isConfirmedCreation || hasNewClientRegistrationData) {
+              const matchedHasRealName = matchedClient?.fullName && matchedClient.fullName !== 'Nuevo Cliente' && matchedClient.fullName !== 'Cliente';
+              const activeCli = (matchedClient && matchedClient.dniNif && matchedHasRealName) ? matchedClient : {
+                fullName: parsed.fullName || (matchedHasRealName ? matchedClient.fullName : '') || (targetOrder.client?.fullName !== 'Cliente de WhatsApp' ? targetOrder.client?.fullName : '') || 'Nuevo Cliente',
+                dniNif: parsed.dniNif || activeDni || matchedClient?.dniNif || (targetOrder.client?.dniNif || ''),
+                phone: parsed.phone || matchedClient?.phone || (targetOrder.client?.phone || ''),
+                email: parsed.email || matchedClient?.email || (targetOrder.client?.email || ''),
+                address: parsed.address || matchedClient?.address || (targetOrder.client?.address || 'Registrado por WhatsApp')
               };
 
-              const activeVeh = candidateVehicle || {
-                brand: parsed.brand || 'Vehículo',
-                model: parsed.model || '',
-                licensePlate: parsed.licensePlate || '',
-                vin: parsed.vin || '',
-                mileage: parsed.mileage || 0,
-                entryDate: new Date().toISOString().split('T')[0]
+              const baseVeh = candidateVehicle || {};
+              const activeVeh = {
+                brand: baseVeh.brand || parsed.brand || 'Vehículo',
+                model: baseVeh.model || parsed.model || '',
+                licensePlate: baseVeh.licensePlate || parsed.licensePlate || '',
+                vin: baseVeh.vin || parsed.vin || '',
+                mileage: baseVeh.mileage || parsed.mileage || 0,
+                entryDate: baseVeh.entryDate || new Date().toISOString().split('T')[0]
               };
 
-              // Si es un cliente nuevo no registrado previamente, guardarlo inmediatamente en Fichas Clientes
-              if (!matchedClient || !matchedClient.dniNif) {
+              // Si es un cliente nuevo o tenía nombre provisional ("Nuevo Cliente"), guardarlo/actualizarlo en Fichas Clientes
+              if (!matchedClient || !matchedClient.dniNif || !matchedHasRealName) {
                 if (activeCli.fullName && (activeCli.dniNif || activeCli.phone)) {
                   addClient(activeCli, activeVeh);
                   setChatSessionClients(prev => ({
@@ -1073,17 +1115,21 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
                       'ORD-NUEVA-RECEPCION': activeVeh
                     }));
                   }
-                  addToast(`👤 Ficha creada: ${activeCli.fullName} (${activeVeh.brand} ${activeVeh.model})`, 'success');
+                  if (!matchedClient) {
+                    addToast(`👤 Ficha creada: ${activeCli.fullName} (${activeVeh.brand} ${activeVeh.model})`, 'success');
+                  }
                 }
               }
 
-              createOrUpdateOrderInRecepcion({
-                client: activeCli,
-                vehicle: activeVeh,
-                problemDescription: detectedProblem || 'Revisión y diagnóstico en taller',
-                clientAnomaliesReport: appointmentNotice || targetOrder.clientAnomaliesReport || 'Notificado y registrado desde WhatsApp',
-                status: 'recepcion'
-              });
+              if (isConfirmedCreation) {
+                createOrUpdateOrderInRecepcion({
+                  client: activeCli,
+                  vehicle: activeVeh,
+                  problemDescription: detectedProblem || 'Revisión y diagnóstico en taller',
+                  clientAnomaliesReport: appointmentNotice || targetOrder.clientAnomaliesReport || 'Notificado y registrado desde WhatsApp',
+                  status: 'recepcion'
+                });
+              }
             }
           } else if (result?.data?.message === 'Error in workflow' || result?.message === 'Error in workflow') {
             addToast('⚠️ Error en la ejecución de n8n (revisa el panel de Executions en n8n)', 'warning');

@@ -29,9 +29,12 @@ export default function Navigation() {
 
   return (
     <header className="app-header glass-panel">
-      <div className="logo-container">
-        <div className="logo-icon">TN</div>
-        <div className="logo-text">Talleres <span>Naranjo</span></div>
+      <div className="logo-container" onClick={() => setActiveTab('kanban')} style={{ cursor: 'pointer' }} title="Talleres Naranjo">
+        <img
+          src="/logo-talleres-naranjo.png"
+          alt="Talleres Naranjo"
+          className="brand-logo-img"
+        />
       </div>
       
       <nav className="nav-tabs">

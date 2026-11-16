@@ -165,5 +165,24 @@ r = turn({
 });
 check('pregunta "cuando puedo pasar a recogerlo?" NO crea tarjeta en Recepción', !r.decision.create);
 
+console.log('\n[15] Cliente NUEVO con datos seguidos en un solo mensaje sin comas (caso real Santiago Bayon)');
+r = turn({
+  history: [
+    { sender: 'client', text: '87635465Z' },
+    { sender: 'ai', text: 'Por favor indícame tus datos obligatorios.' },
+    { sender: 'client', text: 'Santiago Bayon Fernandez +34628009560 santiagobayonfernandez@gmail.com Calle Estepona,1 Audi Q5 9876LMN VSSZZZ1K2V1234567 55000' },
+    { sender: 'ai', text: 'He registrado tus datos correctamente, Santiago. ¿Cuál es el motivo de tu visita?' }
+  ],
+  text: 'fallo de motor',
+  aiReply: 'He generado la tarjeta de recepción para tu Audi Q5 (Matrícula: 9876LMN) por fallo de motor.'
+});
+check('crea tarjeta', r.decision.create);
+check('nombre exacto = Santiago Bayon Fernandez', r.parsed.fullName === 'Santiago Bayon Fernandez', r.parsed.fullName);
+check('dirección limpia = Calle Estepona,1 (sin el resto del tocho)', r.parsed.address === 'Calle Estepona,1', r.parsed.address);
+check('marca = Audi y modelo limpio = Q5 (sin matrícula pegada)', r.parsed.brand === 'Audi' && r.parsed.model === 'Q5', `${r.parsed.brand} | ${r.parsed.model}`);
+check('matrícula = 9876LMN', r.parsed.licensePlate === '9876LMN', r.parsed.licensePlate);
+check('VIN = VSSZZZ1K2V1234567', r.parsed.vin === 'VSSZZZ1K2V1234567', r.parsed.vin);
+check('kilometraje = 55000', r.parsed.mileage === 55000, r.parsed.mileage);
+
 console.log(`\nResultado: ${pass} OK, ${fail} fallos`);
 process.exit(fail ? 1 : 0);
