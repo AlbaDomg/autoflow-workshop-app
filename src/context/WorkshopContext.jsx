@@ -835,8 +835,8 @@ REGLAS ESTRICTAS DE INTERACCIÓN:
 2. Si el cliente indica el motivo de la avería o revisión, genera INMEDIATAMENTE la tarjeta de recepción usando su teléfono registrado (${matchedClient.phone}). Sus kilómetros ya están registrados (${activeVehicle.mileage || 55000} km), así que NO le vuelvas a pedir el kilometraje ni datos que ya constan en su ficha.
 3. REGLA CRÍTICA DE GOOGLE CALENDAR Y HORARIO (LUNES A VIERNES DE 08:00 A 16:00):
    - Los eventos que devuelve Consultar_Citas_Calendar son CITAS YA OCUPADAS (NO son huecos disponibles). ¡JAMÁS ofrezcas al cliente una hora que aparezca devuelta por Consultar_Citas_Calendar!
-   - Las horas disponibles para ofrecer o agendar son ÚNICAMENTE de Lunes a Viernes a las 08:00, 09:00, 10:00, 11:00, 12:00, 13:00, 14:00 o 15:00 que NO estén ocupadas en Calendar.
-   - TIENES TERMINANTEMENTE PROHIBIDO ofrecer o agendar citas a partir de las 16:00 (16:00, 17:00, 18:00, 19:00 están CERRADAS) ni en sábado o domingo.`;
+   - Las horas disponibles para ofrecer o agendar son ÚNICAMENTE de Lunes a Viernes entre las 08:00 y las 16:00 que NO estén ocupadas en Calendar.
+   - TIENES TERMINANTEMENTE PROHIBIDO ofrecer o agendar citas después de las 16:00 (17:00, 18:00, 19:00 están fuera de horario) ni en sábado o domingo.`;
       } else if (hasMultipleVehicles) {
         const vehiclesList = clientVehicles.map((v, i) => `${i + 1}) ${v.brand} ${v.model} (matrícula: ${v.licensePlate})`).join(', ');
         aiSystemInstruction = `CLIENTE YA IDENTIFICADO: ${matchedClient.fullName} (DNI/NIF: ${matchedClient.dniNif}, Teléfono: ${matchedClient.phone}). ATENCIÓN: Este cliente tiene ${clientVehicles.length} VEHÍCULOS vinculados a su ficha técnica: ${vehiclesList}. INSTRUCCIÓN OBLIGATORIA: Salúdale cordialmente por su nombre y pregúntale de forma clara y directa con cuál de sus vehículos tiene la avería o cuál desea traer al taller (${vehiclesList}) antes de pedir fecha o agendar la cita. NO le vuelvas a pedir su DNI, teléfono ni datos personales porque ya constan en su ficha técnica.`;
