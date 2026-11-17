@@ -6,6 +6,7 @@ export default function ClientDirectory() {
     clients, 
     orders, 
     addClient, 
+    updateClient,
     deleteClient, 
     addVehicleToClient, 
     removeVehicleFromClient, 
@@ -16,6 +17,41 @@ export default function ClientDirectory() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDni, setSelectedDni] = useState(() => (clients.length > 0 ? clients[0].dniNif : ''));
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Estados modal edición de cliente
+  const [isEditClientModalOpen, setIsEditClientModalOpen] = useState(false);
+  const [clientToEdit, setClientToEdit] = useState(null);
+  const [editClientForm, setEditClientForm] = useState({
+    fullName: '',
+    dniNif: '',
+    phone: '',
+    email: '',
+    address: ''
+  });
+
+  const openEditClientModal = (client) => {
+    setClientToEdit(client);
+    setEditClientForm({
+      fullName: client.fullName || '',
+      dniNif: client.dniNif || '',
+      phone: client.phone || '',
+      email: client.email || '',
+      address: client.address || ''
+    });
+    setIsEditClientModalOpen(true);
+  };
+
+  const handleSaveClientEdit = (e) => {
+    e.preventDefault();
+    if (!clientToEdit) return;
+
+    updateClient(clientToEdit.dniNif, editClientForm);
+    if (selectedDni === clientToEdit.dniNif && editClientForm.dniNif) {
+      setSelectedDni(editClientForm.dniNif.toUpperCase().trim());
+    }
+    setIsEditClientModalOpen(false);
+    setClientToEdit(null);
+  };
 
   // Form states for manual registration
   const [fullName, setFullName] = useState('');
@@ -251,36 +287,61 @@ export default function ClientDirectory() {
                   <span>{c.vehicles.length} {c.vehicles.length === 1 ? 'vehículo' : 'vehículos'}</span>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDeleteClient(c);
-                }}
-                title="Eliminar este cliente"
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#ff4d4f',
-                  cursor: 'pointer',
-                  fontSize: '0.9rem',
-                  padding: '0.25rem 0.45rem',
-                  borderRadius: '4px',
-                  opacity: 0.65,
-                  marginLeft: '0.5rem',
-                  transition: 'opacity 0.2s ease, transform 0.15s ease'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.opacity = '1';
-                  e.currentTarget.style.transform = 'scale(1.15)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.opacity = '0.65';
-                  e.currentTarget.style.transform = 'scale(1)';
-                }}
-              >
-                🗑️
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginLeft: '0.4rem' }}>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openEditClientModal(c);
+                  }}
+                  title="Editar datos de este cliente"
+                  style={{
+                    background: 'rgba(0, 242, 254, 0.12)',
+                    color: '#00f2fe',
+                    border: '1px solid rgba(0, 242, 254, 0.35)',
+                    borderRadius: '5px',
+                    padding: '0.22rem 0.38rem',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteClient(c);
+                  }}
+                  title="Eliminar este cliente"
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#ff4d4f',
+                    cursor: 'pointer',
+                    fontSize: '0.9rem',
+                    padding: '0.25rem 0.45rem',
+                    borderRadius: '4px',
+                    opacity: 0.65,
+                    transition: 'opacity 0.2s ease, transform 0.15s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.opacity = '1';
+                    e.currentTarget.style.transform = 'scale(1.15)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.opacity = '0.65';
+                    e.currentTarget.style.transform = 'scale(1)';
+                  }}
+                >
+                  🗑️
+                </button>
+              </div>
             </div>
           ))}
           {filteredClients.length === 0 && (
@@ -303,6 +364,27 @@ export default function ClientDirectory() {
                     {activeClient.fullName}
                   </h3>
                   <span className="card-order-id">FICHA DE CLIENTE</span>
+                  <button
+                    type="button"
+                    onClick={() => openEditClientModal(activeClient)}
+                    title="Editar datos del cliente"
+                    style={{
+                      background: 'rgba(0, 242, 254, 0.12)',
+                      color: '#00f2fe',
+                      border: '1px solid rgba(0, 242, 254, 0.35)',
+                      borderRadius: '6px',
+                      padding: '0.24rem 0.5rem',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                    </svg>
+                  </button>
                 </div>
               </div>
               <div className="history-card-body" style={{ gridTemplateColumns: '1fr 1fr', padding: 0, border: 'none', gap: '0.75rem', marginTop: '0.5rem' }}>
@@ -824,6 +906,114 @@ export default function ClientDirectory() {
                   style={{ flex: 1 }}
                 >
                   💾 Vincular Vehículo
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL EDITAR CLIENTE */}
+      {isEditClientModalOpen && clientToEdit && (
+        <div className="overlay">
+          <div className="glass-panel modal-content" style={{ maxWidth: '520px' }}>
+            <button type="button" className="modal-close" onClick={() => setIsEditClientModalOpen(false)}>×</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.6rem' }}>
+              <span style={{
+                background: 'rgba(0, 242, 254, 0.15)',
+                color: '#00f2fe',
+                borderRadius: '8px',
+                padding: '0.4rem 0.5rem',
+                display: 'inline-flex',
+                alignItems: 'center'
+              }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                </svg>
+              </span>
+              <div>
+                <h3 className="modal-title" style={{ margin: 0 }}>Editar Ficha de Cliente</h3>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  Modifica los datos de contacto y facturación del cliente
+                </div>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveClientEdit} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label style={{ fontSize: '0.8rem' }}>Nombre Completo</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  required
+                  placeholder="Ej: María Fernández Domínguez"
+                  value={editClientForm.fullName}
+                  onChange={(e) => setEditClientForm(prev => ({ ...prev, fullName: e.target.value }))}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.6rem' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label style={{ fontSize: '0.8rem' }}>DNI / NIF</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    required
+                    placeholder="Ej: 77889966L"
+                    value={editClientForm.dniNif}
+                    onChange={(e) => setEditClientForm(prev => ({ ...prev, dniNif: e.target.value.toUpperCase() }))}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label style={{ fontSize: '0.8rem' }}>Teléfono (WhatsApp)</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Ej: +34 620 922 500"
+                    value={editClientForm.phone}
+                    onChange={(e) => setEditClientForm(prev => ({ ...prev, phone: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.6rem' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label style={{ fontSize: '0.8rem' }}>Correo Electrónico</label>
+                  <input
+                    type="email"
+                    className="form-control"
+                    placeholder="cliente@ejemplo.com"
+                    value={editClientForm.email}
+                    onChange={(e) => setEditClientForm(prev => ({ ...prev, email: e.target.value }))}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label style={{ fontSize: '0.8rem' }}>Dirección Postal</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Calle Mayor 12, Ciudad"
+                    value={editClientForm.address}
+                    onChange={(e) => setEditClientForm(prev => ({ ...prev, address: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ flex: 1 }}
+                  onClick={() => setIsEditClientModalOpen(false)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="btn"
+                  style={{ flex: 1 }}
+                >
+                  Guardar Cambios
                 </button>
               </div>
             </form>

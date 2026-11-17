@@ -2612,6 +2612,49 @@ REGLA CRÍTICA UNIVERSAL DE CITAS Y GOOGLE CALENDAR (LUNES A VIERNES DE 08:00 A 
     });
   };
 
+  // Modificar/editar datos de un cliente existente
+  const updateClient = (originalDni, updatedClientData) => {
+    if (!originalDni || !updatedClientData) return;
+    const cleanOrigDni = originalDni.trim().toUpperCase();
+
+    clientsMutationSeqRef.current += 1;
+    skipNextClientsPushRef.current = false;
+
+    setClients(prev => prev.map(c => {
+      if (c.dniNif?.toUpperCase() !== cleanOrigDni) return c;
+      return {
+        ...c,
+        fullName: updatedClientData.fullName?.trim() || c.fullName,
+        dniNif: updatedClientData.dniNif?.trim().toUpperCase() || c.dniNif,
+        phone: updatedClientData.phone?.trim() || c.phone,
+        email: updatedClientData.email?.trim() || c.email,
+        address: updatedClientData.address?.trim() || c.address
+      };
+    }));
+
+    // Sincronizar también con órdenes activas que pertenezcan a este DNI
+    ordersMutationSeqRef.current += 1;
+    skipNextOrdersPushRef.current = false;
+    setOrders(prev => prev.map(o => {
+      if (o.client?.dniNif?.toUpperCase() === cleanOrigDni) {
+        return {
+          ...o,
+          client: {
+            ...o.client,
+            fullName: updatedClientData.fullName?.trim() || o.client.fullName,
+            dniNif: updatedClientData.dniNif?.trim().toUpperCase() || o.client.dniNif,
+            phone: updatedClientData.phone?.trim() || o.client.phone,
+            email: updatedClientData.email?.trim() || o.client.email
+          },
+          updatedAt: Date.now()
+        };
+      }
+      return o;
+    }));
+
+    addToast('✏️ Ficha de cliente actualizada', 'success');
+  };
+
   // Eliminar un cliente del directorio y base de datos de forma permanente
   const deleteClient = async (dniNif) => {
     if (!dniNif) return;
@@ -2880,6 +2923,7 @@ REGLA CRÍTICA UNIVERSAL DE CITAS Y GOOGLE CALENDAR (LUNES A VIERNES DE 08:00 A 
       sendDeliveryAlert,
       deliverVehicle,
       addClient,
+      updateClient,
       deleteClient,
       addVehicleToClient,
       removeVehicleFromClient,
