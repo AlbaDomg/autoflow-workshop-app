@@ -287,61 +287,36 @@ export default function ClientDirectory() {
                   <span>{c.vehicles.length} {c.vehicles.length === 1 ? 'vehículo' : 'vehículos'}</span>
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginLeft: '0.4rem' }}>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openEditClientModal(c);
-                  }}
-                  title="Editar datos de este cliente"
-                  style={{
-                    background: 'rgba(0, 242, 254, 0.12)',
-                    color: '#00f2fe',
-                    border: '1px solid rgba(0, 242, 254, 0.35)',
-                    borderRadius: '5px',
-                    padding: '0.22rem 0.38rem',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteClient(c);
-                  }}
-                  title="Eliminar este cliente"
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: '#ff4d4f',
-                    cursor: 'pointer',
-                    fontSize: '0.9rem',
-                    padding: '0.25rem 0.45rem',
-                    borderRadius: '4px',
-                    opacity: 0.65,
-                    transition: 'opacity 0.2s ease, transform 0.15s ease'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.opacity = '1';
-                    e.currentTarget.style.transform = 'scale(1.15)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.opacity = '0.65';
-                    e.currentTarget.style.transform = 'scale(1)';
-                  }}
-                >
-                  🗑️
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteClient(c);
+                }}
+                title="Eliminar este cliente"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#ff4d4f',
+                  cursor: 'pointer',
+                  fontSize: '0.9rem',
+                  padding: '0.25rem 0.45rem',
+                  borderRadius: '4px',
+                  opacity: 0.65,
+                  marginLeft: '0.5rem',
+                  transition: 'opacity 0.2s ease, transform 0.15s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.opacity = '1';
+                  e.currentTarget.style.transform = 'scale(1.15)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.opacity = '0.65';
+                  e.currentTarget.style.transform = 'scale(1)';
+                }}
+              >
+                🗑️
+              </button>
             </div>
           ))}
           {filteredClients.length === 0 && (
