@@ -246,30 +246,38 @@ const ensureOrdersHaveTokens = (ordersList) => {
         cleanProblem = formatMechanicProblemSummary(cleanProblem);
       }
 
-      // Sanear modelos que tuvieran pegada la matrícula por error y reparar fichas con 'Nuevo Cliente'
+      // Sanear modelos que tuvieran pegada la matrícula por error y reparar fichas con 'Nuevo Cliente' o cortesías
       const cleanModel = (o.vehicle?.model || '').replace(/\b[0-9]{4}\s*[A-Za-z]{3}\b/g, '').trim();
       let fixedClientName = o.client?.fullName;
+      const isBadName = !fixedClientName ||
+        fixedClientName === 'Nuevo Cliente' ||
+        fixedClientName === 'Cliente' ||
+        /asistente/i.test(fixedClientName || '') ||
+        /taller/i.test(fixedClientName || '') ||
+        isCourtesyText(fixedClientName || '') ||
+        /^(si|sí|porfa|gracias|vale|ok|bueno|hola)/i.test(fixedClientName || '');
+
       if (
-        (fixedClientName === 'Nuevo Cliente' || fixedClientName === 'Cliente' || /asistente/i.test(fixedClientName || '') || /taller/i.test(fixedClientName || '')) &&
+        isBadName &&
         (/santiagobayon/i.test(o.client?.email || '') || o.client?.dniNif === '87635465Z' || o.client?.phone === '+34628009560')
       ) {
         fixedClientName = 'Santiago Bayon Fernandez';
       }
       if (
-        (fixedClientName === 'Manuel' || fixedClientName === 'Nuevo Cliente' || fixedClientName === 'Cliente') &&
+        (isBadName || fixedClientName === 'Manuel') &&
         (o.client?.dniNif === '77326719G' || /manuelgonzalezperez/i.test(o.client?.email || '') || o.client?.phone === '+34693483441')
       ) {
         fixedClientName = 'Manuel Gonzalez Perez';
       }
       if (
-        (fixedClientName === 'Maria' || fixedClientName === 'Nuevo Cliente' || fixedClientName === 'Cliente') &&
+        (isBadName || fixedClientName === 'Maria') &&
         (o.client?.dniNif === '77889966L' || /mariafernandez/i.test(o.client?.email || '') || o.client?.phone === '+34678546333' || o.vehicle?.licensePlate === '8769JKP')
       ) {
         fixedClientName = 'Maria Fernandez Dominguez';
       }
 
-      // Si el nombre sigue siendo 'Cliente' o vacío, buscar en la lista de clientes registrados
-      if (!fixedClientName || fixedClientName === 'Cliente' || fixedClientName === 'Nuevo Cliente') {
+      // Si el nombre sigue siendo 'Cliente' o una cortesía, buscar en la lista de clientes registrados
+      if (!fixedClientName || isBadName) {
         const oDni = (o.client?.dniNif || '').trim().toUpperCase();
         const oPhone = (o.client?.phone || '').replace(/\s+/g, '');
         const oPlate = (o.vehicle?.licensePlate || '').trim().toUpperCase();
@@ -278,8 +286,10 @@ const ensureOrdersHaveTokens = (ordersList) => {
           (oPhone && c.phone && c.phone.replace(/\s+/g, '') === oPhone) ||
           (oPlate && Array.isArray(c.vehicles) && c.vehicles.some(v => v.licensePlate?.toUpperCase() === oPlate))
         );
-        if (found && found.fullName && found.fullName !== 'Cliente' && found.fullName !== 'Nuevo Cliente') {
+        if (found && found.fullName && found.fullName !== 'Cliente' && found.fullName !== 'Nuevo Cliente' && !isCourtesyText(found.fullName)) {
           fixedClientName = found.fullName;
+        } else {
+          fixedClientName = 'Cliente';
         }
       }
 

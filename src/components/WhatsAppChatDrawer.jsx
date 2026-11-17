@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useWorkshop, DEFAULT_CHAT_ORDER } from '../context/WorkshopContext';
+import { isCourtesyText } from '../utils/chatCardLogic';
 
 export default function WhatsAppChatDrawer() {
   const {
     orders,
+    clients,
     whatsappChats,
     isWaDrawerOpen,
     setIsWaDrawerOpen,
@@ -27,36 +29,41 @@ export default function WhatsAppChatDrawer() {
     (activeWaOrderId && orders.find(o => o.id === activeWaOrderId)) ||
     DEFAULT_CHAT_ORDER;
 
-  // FUSIÓN ATÓMICA E INMUNE A DUPLICADOS: Jamás vaciar mensajes y descartar duplicados en pantalla
+  // Resolver nombre y teléfono del cliente buscando en Fichas Clientes si en la orden venía genérico
+  const resolvedClientName = React.useMemo(() => {
+    const raw = activeOrder?.client?.fullName;
+    if (raw && raw !== 'Cliente' && raw !== 'Nuevo Cliente' && !isCourtesyText(raw) && !/^(si|sí|porfa|gracias|vale|ok)/i.test(raw)) {
+      return raw;
+    }
+    const oDni = (activeOrder?.client?.dniNif || '').trim().toUpperCase();
+    const oPhone = (activeOrder?.client?.phone || '').replace(/\s+/g, '');
+    const oPlate = (activeOrder?.vehicle?.licensePlate || '').trim().toUpperCase();
+    const found = Array.isArray(clients) && clients.find(c =>
+      (oDni && c.dniNif && c.dniNif.toUpperCase() === oDni) ||
+      (oPhone && c.phone && c.phone.replace(/\s+/g, '') === oPhone) ||
+      (oPlate && Array.isArray(c.vehicles) && c.vehicles.some(v => v.licensePlate?.toUpperCase() === oPlate))
+    );
+    return found?.fullName || raw || 'Cliente';
+  }, [activeOrder, clients]);
+
+  const resolvedClientPhone = React.useMemo(() => {
+    const raw = activeOrder?.client?.phone;
+    if (raw) return raw;
+    const oDni = (activeOrder?.client?.dniNif || '').trim().toUpperCase();
+    const found = Array.isArray(clients) && clients.find(c => oDni && c.dniNif && c.dniNif.toUpperCase() === oDni);
+    return found?.phone || '+34 620 922 500';
+  }, [activeOrder, clients]);
+
+  // Obtener los mensajes correspondientes a la orden activa (aislados por orden para no mezclar clientes)
   const currentMessages = React.useMemo(() => {
-    const activeList = (activeOrder && whatsappChats[activeOrder.id]) || [];
-    const fallbackList = whatsappChats['ORD-NUEVA-RECEPCION'] || [];
-    const directActiveList = (activeWaOrderId && whatsappChats[activeWaOrderId]) || [];
+    // Si estamos en la orden genérica de nueva recepción (botón flotante de WhatsApp):
+    if (!activeWaOrderId || activeWaOrderId === DEFAULT_CHAT_ORDER.id || activeOrder?.id === DEFAULT_CHAT_ORDER.id) {
+      return whatsappChats['ORD-NUEVA-RECEPCION'] || [];
+    }
 
-    const rawCombined = [...fallbackList, ...directActiveList, ...activeList];
-
-    // Deduplicación inteligente:
-    // 1. Por ID único de mensaje
-    // 2. Por contenido (mismo emisor + mismo texto dentro de una ventana de 25 segundos)
-    const seenIds = new Set();
-    const seenContentKeys = new Set();
-    const uniqueMessages = [];
-
-    rawCombined.forEach(m => {
-      if (!m || !m.text) return;
-      if (m.id && seenIds.has(m.id)) return;
-      if (m.id) seenIds.add(m.id);
-
-      const timeBucket = Math.floor(new Date(m.timestamp || 0).getTime() / 25000);
-      const contentKey = `${m.sender}_${String(m.text).trim()}_${timeBucket}`;
-      if (seenContentKeys.has(contentKey)) return;
-      seenContentKeys.add(contentKey);
-
-      uniqueMessages.push(m);
-    });
-
-    uniqueMessages.sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
-    return uniqueMessages;
+    // Si estamos en una orden específica de una tarjeta (ej: ORD-2026-623 o ORD-2026-483):
+    // Mostrar ÚNICAMENTE los mensajes de esa orden concreta
+    return whatsappChats[activeOrder.id] || whatsappChats[activeWaOrderId] || [];
   }, [whatsappChats, activeOrder?.id, activeWaOrderId]);
 
   useEffect(() => {
@@ -244,7 +251,7 @@ export default function WhatsAppChatDrawer() {
                   flexShrink: 0
                 }}
               >
-                {(activeOrder?.client?.fullName || 'Cliente')
+                {(resolvedClientName || 'Cliente')
                   .split(' ')
                   .filter(Boolean)
                   .slice(0, 2)
@@ -254,10 +261,10 @@ export default function WhatsAppChatDrawer() {
 
               <div style={{ minWidth: 0 }}>
                 <div style={{ color: '#e9edef', fontWeight: 600, fontSize: '0.92rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {activeOrder?.client?.fullName || 'Cliente'}
+                  {resolvedClientName}
                 </div>
                 <div style={{ color: '#8696a0', fontSize: '0.73rem' }}>
-                  {isWaAiTyping ? 'escribiendo...' : `${activeOrder?.client?.phone || '+34 620 922 500'} • en línea`}
+                  {isWaAiTyping ? 'escribiendo...' : `${resolvedClientPhone} • en línea`}
                 </div>
               </div>
             </div>
@@ -516,6 +523,36 @@ export default function WhatsAppChatDrawer() {
             >
               🔒 Los mensajes están cifrados de extremo a extremo. Nadie fuera de este chat, ni siquiera WhatsApp, puede leerlos.
             </div>
+
+            {currentMessages.length === 0 && (
+              <div
+                style={{
+                  alignSelf: 'center',
+                  background: 'rgba(32, 44, 51, 0.75)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  color: '#8696a0',
+                  fontSize: '0.78rem',
+                  padding: '0.75rem 1rem',
+                  borderRadius: '10px',
+                  textAlign: 'center',
+                  maxWidth: '85%',
+                  marginTop: '1.2rem',
+                  lineHeight: 1.45
+                }}
+              >
+                <div style={{ color: '#25D366', fontWeight: 600, marginBottom: '0.25rem', fontSize: '0.85rem' }}>
+                  💬 Conversación con {resolvedClientName}
+                </div>
+                {activeOrder?.vehicle?.brand && activeOrder.vehicle.brand !== 'Vehículo' && (
+                  <div style={{ color: '#e9edef', fontSize: '0.74rem', marginBottom: '0.35rem' }}>
+                    Vehículo: {activeOrder.vehicle.brand} {activeOrder.vehicle.model} ({activeOrder.vehicle.licensePlate})
+                  </div>
+                )}
+                <div style={{ fontSize: '0.72rem', color: '#8696a0' }}>
+                  Escribe un mensaje abajo para comunicarte directamente con el cliente.
+                </div>
+              </div>
+            )}
 
             {currentMessages.map(msg => {
               const isOutgoing = msg.sender === 'workshop' || msg.sender === 'ai';

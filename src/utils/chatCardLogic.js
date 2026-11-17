@@ -177,12 +177,16 @@ export const parseClientAndVehicleFromConversation = (aiReply = '', chatHistory 
     if (!cand || typeof cand !== 'string') return true;
     const lower = cand.toLowerCase().trim();
     if (lower.length < 3) return true;
+    // Si coincide con cortesías, confirmaciones o saludos habituales
+    if (isCourtesyText(lower) || isCourtesyText(cand)) {
+      return true;
+    }
     // Palabras del sistema, IA o roles que JAMÁS pueden ser el nombre del cliente
     if (/(?:asistente|taller|naranjo|virtual|recepci[oó]n|mecanico|mecánico|administrador|cliente|bot|\bia\b|veh[ií]culo|coche|presupuesto|diagn[oó]stico)/i.test(lower)) {
       return true;
     }
-    // Cortesías o saludos
-    if (/^(?:hola|buenos\s+d[ií]as|buenas\s+tardes|buenas\s+noches|muchas\s+gracias|gracias|perfecto|entendido|de\s+acuerdo|vamos\s+a|por\s+favor|porfa|estimad[oa])$/i.test(lower)) {
+    // Palabras conversacionales, cortesías, fechas o partículas que NUNCA componen un nombre de persona
+    if (/\b(si|sí|no|porfa|por\s+favor|gracias|muchas|buenas|buenos|dias|días|tardes|noches|hola|adios|adiós|genial|perfecto|vale|ok|okey|okay|entendido|de\s+acuerdo|cita|hora|mañana|hoy|tarde|lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)\b/i.test(lower)) {
       return true;
     }
     // Marcas de coches o modelos

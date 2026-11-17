@@ -249,5 +249,16 @@ check('extrae nombre María Fernández Domínguez correctamente (no bloqueado po
 check('extrae DNI de María', r.parsed.dniNif === '77889966L', r.parsed.dniNif);
 check('extrae matrícula de María', r.parsed.licensePlate === '8769JKP', r.parsed.licensePlate);
 
+console.log('\n[20] Conversación con cortesía: "Si porfa" JAMÁS debe ser interpretado como nombre de cliente');
+r = turn({
+  history: [
+    { sender: 'client', text: 'Hay ruidos raros en el motor' },
+    { sender: 'ai', text: 'He generado la tarjeta de recepción para tu Ford Focus. ¿Te gustaría agendar una cita?' }
+  ],
+  text: 'Si porfa',
+  aiReply: '¿Qué día te viene bien? Tengo disponibles los siguientes tramos...'
+});
+check('"Si porfa" NO es capturado como nombre de persona', r.parsed.fullName !== 'Si porfa' && !r.parsed.fullName, r.parsed.fullName);
+
 console.log(`\nResultado: ${pass} OK, ${fail} fallos`);
 process.exit(fail ? 1 : 0);
