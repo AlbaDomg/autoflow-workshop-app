@@ -2761,12 +2761,19 @@ REGLA CRÍTICA UNIVERSAL DE CITAS Y GOOGLE CALENDAR (LUNES A VIERNES DE 08:00 A 
         ...(updatedData.vehicle || {})
       };
 
+      const updatedFinancials = updatedData.financials ? {
+        ...order.financials,
+        ...updatedData.financials
+      } : order.financials;
+
       const updated = {
         ...order,
         client: updatedClient,
         vehicle: updatedVehicle,
         problemDescription: updatedData.problemDescription !== undefined ? updatedData.problemDescription : order.problemDescription,
         clientAnomaliesReport: updatedData.clientAnomaliesReport !== undefined ? updatedData.clientAnomaliesReport : order.clientAnomaliesReport,
+        diagnosisText: updatedData.diagnosisText !== undefined ? updatedData.diagnosisText : order.diagnosisText,
+        financials: updatedFinancials,
         updatedAt: nowTs
       };
 

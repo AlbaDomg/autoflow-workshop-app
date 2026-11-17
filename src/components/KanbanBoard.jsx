@@ -33,7 +33,9 @@ export default function KanbanBoard() {
     model: '',
     licensePlate: '',
     mileage: '',
-    problemDescription: ''
+    problemDescription: '',
+    diagnosisText: '',
+    repairSubtotal: ''
   });
   
   // Diagnosis Form Local States
@@ -139,7 +141,9 @@ export default function KanbanBoard() {
       model: order.vehicle?.model || '',
       licensePlate: order.vehicle?.licensePlate || '',
       mileage: order.vehicle?.mileage !== undefined && order.vehicle?.mileage !== null ? order.vehicle.mileage : '',
-      problemDescription: order.problemDescription || ''
+      problemDescription: order.problemDescription || '',
+      diagnosisText: order.diagnosisText || '',
+      repairSubtotal: order.financials?.repairSubtotal || ''
     });
     setModalType('edit-order');
   };
@@ -148,7 +152,7 @@ export default function KanbanBoard() {
     e.preventDefault();
     if (!selectedOrder) return;
 
-    updateOrderDetails(selectedOrder.id, {
+    const payload = {
       client: {
         fullName: editForm.fullName.trim(),
         dniNif: editForm.dniNif.trim(),
@@ -162,7 +166,22 @@ export default function KanbanBoard() {
         mileage: editForm.mileage !== '' ? Number(editForm.mileage) : 0
       },
       problemDescription: editForm.problemDescription.trim()
-    });
+    };
+
+    if (selectedOrder.diagnosisText || editForm.diagnosisText) {
+      payload.diagnosisText = editForm.diagnosisText.trim();
+      const subtotalNum = parseFloat(editForm.repairSubtotal) || 0;
+      const diagCost = selectedOrder.financials?.diagnosticCost || 50;
+      const taxRate = selectedOrder.financials?.taxRate || 0.21;
+      const totalDue = parseFloat(((subtotalNum + diagCost) * (1 + taxRate)).toFixed(2));
+      payload.financials = {
+        ...selectedOrder.financials,
+        repairSubtotal: subtotalNum,
+        totalDue
+      };
+    }
+
+    updateOrderDetails(selectedOrder.id, payload);
 
     setModalType(null);
     setSelectedOrder(null);
@@ -313,9 +332,6 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                 
                 {order.diagnosisText ? (
                   <>
-                    <button className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.4rem' }} onClick={() => openDiagnosisModal(order)}>
-                      Editar Diagnóstico
-                    </button>
                     <button className="btn" style={{ fontSize: '0.8rem', padding: '0.4rem' }} onClick={() => sendWhatsAppBudget(order)}>
                       Enviar Presupuesto (WA)
                     </button>
@@ -1070,7 +1086,7 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
             </div>
 
             {/* SECCIÓN AVERÍA */}
-            <div className="form-group" style={{ marginTop: '0.75rem', marginBottom: '1rem' }}>
+            <div className="form-group" style={{ marginTop: '0.75rem', marginBottom: selectedOrder.diagnosisText ? '0.75rem' : '1rem' }}>
               <label style={{ fontSize: '0.78rem' }}>Motivo de la Visita / Avería Reportada</label>
               <textarea
                 className="form-control"
@@ -1080,6 +1096,43 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                 placeholder="Descripción del problema o motivo de entrada..."
               />
             </div>
+
+            {/* SECCIÓN DIAGNÓSTICO Y PRESUPUESTO (si la orden ya ha sido diagnosticada) */}
+            {selectedOrder.diagnosisText && (
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid var(--border-glass)',
+                borderRadius: '8px',
+                padding: '0.85rem',
+                marginTop: '0.75rem',
+                marginBottom: '1rem'
+              }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#00f2fe', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.6rem' }}>
+                  🔧 Diagnóstico y Presupuesto
+                </div>
+                <div className="form-group" style={{ marginBottom: '0.6rem' }}>
+                  <label style={{ fontSize: '0.78rem' }}>Informe Técnico de Diagnóstico</label>
+                  <textarea
+                    className="form-control"
+                    rows="2"
+                    value={editForm.diagnosisText}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, diagnosisText: e.target.value }))}
+                    placeholder="Diagnóstico técnico del taller..."
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label style={{ fontSize: '0.78rem' }}>Presupuesto Estimado de Reparación (€)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="form-control"
+                    placeholder="Ej: 258.00"
+                    value={editForm.repairSubtotal}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, repairSubtotal: e.target.value }))}
+                  />
+                </div>
+              </div>
+            )}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.5rem' }}>
               <button type="button" className="btn btn-secondary" onClick={() => setModalType(null)}>

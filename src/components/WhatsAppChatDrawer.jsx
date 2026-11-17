@@ -505,54 +505,25 @@ export default function WhatsAppChatDrawer() {
               HOY
             </div>
 
-            {/* Aviso nativo de cifrado de extremo a extremo de WhatsApp */}
+            {/* Aviso nativo oficial de cifrado de extremo a extremo de WhatsApp */}
             <div
               style={{
                 alignSelf: 'center',
                 background: '#182229',
                 color: '#ffd279',
-                fontSize: '0.69rem',
-                padding: '0.38rem 0.65rem',
+                fontSize: '0.68rem',
+                padding: '0.38rem 0.75rem',
                 borderRadius: '8px',
                 textAlign: 'center',
-                maxWidth: '90%',
+                maxWidth: '88%',
                 marginBottom: '0.4rem',
                 lineHeight: 1.35,
-                boxShadow: '0 1px 1px rgba(0,0,0,0.2)'
+                boxShadow: '0 1px 1px rgba(0,0,0,0.2)',
+                cursor: 'pointer'
               }}
             >
-              🔒 Los mensajes están cifrados de extremo a extremo. Nadie fuera de este chat, ni siquiera WhatsApp, puede leerlos.
+              🔒 Los mensajes y las llamadas están cifrados de extremo a extremo. Nadie fuera de este chat, ni siquiera WhatsApp, puede leerlos ni escucharlos. Toca para obtener más información.
             </div>
-
-            {currentMessages.length === 0 && (
-              <div
-                style={{
-                  alignSelf: 'center',
-                  background: 'rgba(32, 44, 51, 0.75)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  color: '#8696a0',
-                  fontSize: '0.78rem',
-                  padding: '0.75rem 1rem',
-                  borderRadius: '10px',
-                  textAlign: 'center',
-                  maxWidth: '85%',
-                  marginTop: '1.2rem',
-                  lineHeight: 1.45
-                }}
-              >
-                <div style={{ color: '#25D366', fontWeight: 600, marginBottom: '0.25rem', fontSize: '0.85rem' }}>
-                  💬 Conversación con {resolvedClientName}
-                </div>
-                {activeOrder?.vehicle?.brand && activeOrder.vehicle.brand !== 'Vehículo' && (
-                  <div style={{ color: '#e9edef', fontSize: '0.74rem', marginBottom: '0.35rem' }}>
-                    Vehículo: {activeOrder.vehicle.brand} {activeOrder.vehicle.model} ({activeOrder.vehicle.licensePlate})
-                  </div>
-                )}
-                <div style={{ fontSize: '0.72rem', color: '#8696a0' }}>
-                  Escribe un mensaje abajo para comunicarte directamente con el cliente.
-                </div>
-              </div>
-            )}
 
             {currentMessages.map(msg => {
               const isOutgoing = msg.sender === 'workshop' || msg.sender === 'ai';
