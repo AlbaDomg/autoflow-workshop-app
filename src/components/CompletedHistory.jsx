@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useWorkshop } from '../context/WorkshopContext';
 
 export default function CompletedHistory() {
-  const { orders, mechanics, downloadOrderPdf, clearDeliveredOrders, deleteOrder } = useWorkshop();
+  const { orders, clients, mechanics, downloadOrderPdf, clearDeliveredOrders, deleteOrder } = useWorkshop();
   const [searchTerm, setSearchTerm] = useState('');
 
   // Filtrar órdenes entregadas
@@ -108,10 +108,27 @@ export default function CompletedHistory() {
                 <div>
                   <h4 className="section-small-title">Cliente</h4>
                   <div className="history-details-list">
-                    <div><span>Nombre:</span> <strong>{order.client.fullName}</strong></div>
+                    <div>
+                      <span>Nombre:</span>{' '}
+                      <strong>
+                        {(() => {
+                          const n = order.client?.fullName;
+                          if (n && n !== 'Cliente' && n !== 'Nuevo Cliente') return n;
+                          const found = Array.isArray(clients) && clients.find(c =>
+                            (order.client?.dniNif && c.dniNif && c.dniNif.toUpperCase() === order.client.dniNif.toUpperCase()) ||
+                            (order.client?.phone && c.phone && c.phone.replace(/\s+/g, '') === order.client.phone.replace(/\s+/g, '')) ||
+                            (order.vehicle?.licensePlate && Array.isArray(c.vehicles) && c.vehicles.some(v => v.licensePlate?.toUpperCase() === order.vehicle.licensePlate.toUpperCase()))
+                          );
+                          return found?.fullName || n || 'Cliente';
+                        })()}
+                      </strong>
+                    </div>
                     <div><span>DNI/NIF:</span> {order.client.dniNif}</div>
                     <div><span>Teléfono:</span> {order.client.phone}</div>
-                    <div><span>Email:</span> {order.client.email}</div>
+                    <div>
+                      <span>Email:</span>{' '}
+                      {order.client?.email || (Array.isArray(clients) && clients.find(c => c.dniNif === order.client?.dniNif)?.email) || ''}
+                    </div>
                   </div>
                 </div>
 

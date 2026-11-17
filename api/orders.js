@@ -155,6 +155,12 @@ export default async function handler(req, res) {
     ) {
       clientFullName = 'Manuel Gonzalez Perez';
     }
+    if (
+      (clientFullName === 'Maria' || clientFullName === 'Cliente' || clientFullName === 'Nuevo Cliente') &&
+      (clientDni === '77889966L' || /mariafernandez/i.test(clientEmail) || clientPhone === '+34678546333')
+    ) {
+      clientFullName = 'Maria Fernandez Dominguez';
+    }
 
     const vehicleBrand = (body.vehicleBrand || body.brand || body.marca || body.vehicle?.brand || 'Vehículo').trim();
     const vehicleModel = (body.vehicleModel || body.model || body.modelo || body.vehicle?.model || '').trim();

@@ -239,5 +239,15 @@ check('extrae nombre completo con apellidos', r.parsed.fullName === 'Manuel Gonz
 check('extrae DNI', r.parsed.dniNif === '77326719G', r.parsed.dniNif);
 check('extrae matrícula', r.parsed.licensePlate === '5691GTH', r.parsed.licensePlate);
 
+console.log('\n[19] Cliente NUEVO - Maria Fernandez Dominguez (nombres con sufijo -ia como Maria, Lucia, Sofia)');
+r = turn({
+  history: [],
+  text: 'Maria Fernandez Dominguez DNI: 77889966L Tel: +34678546333 Email: maria@gmail.com Coche: Ford Focus Matricula: 8769JKP KM: 0 Motivo: fallo en la bateria',
+  aiReply: 'Perfecto Maria Fernandez Dominguez, tarjeta de recepción creada para tu Ford Focus.'
+});
+check('extrae nombre María Fernández Domínguez correctamente (no bloqueado por "ia")', r.parsed.fullName === 'Maria Fernandez Dominguez', r.parsed.fullName);
+check('extrae DNI de María', r.parsed.dniNif === '77889966L', r.parsed.dniNif);
+check('extrae matrícula de María', r.parsed.licensePlate === '8769JKP', r.parsed.licensePlate);
+
 console.log(`\nResultado: ${pass} OK, ${fail} fallos`);
 process.exit(fail ? 1 : 0);

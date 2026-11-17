@@ -178,7 +178,7 @@ export const parseClientAndVehicleFromConversation = (aiReply = '', chatHistory 
     const lower = cand.toLowerCase().trim();
     if (lower.length < 3) return true;
     // Palabras del sistema, IA o roles que JAMÁS pueden ser el nombre del cliente
-    if (/(?:asistente|taller|naranjo|virtual|recepci[oó]n|mecanico|mecánico|administrador|cliente|bot|ia\b|veh[ií]culo|coche|presupuesto|diagn[oó]stico)/i.test(lower)) {
+    if (/(?:asistente|taller|naranjo|virtual|recepci[oó]n|mecanico|mecánico|administrador|cliente|bot|\bia\b|veh[ií]culo|coche|presupuesto|diagn[oó]stico)/i.test(lower)) {
       return true;
     }
     // Cortesías o saludos

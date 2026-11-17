@@ -35,6 +35,12 @@ export default async function handler(req, res) {
         ) {
           full = 'Manuel Gonzalez Perez';
         }
+        if (
+          (full === 'Maria' || full === 'Cliente' || !full) &&
+          (rawProfile.dniNif === '77889966L' || /mariafernandez/i.test(rawProfile.email || '') || rawProfile.phone === '+34678546333')
+        ) {
+          full = 'Maria Fernandez Dominguez';
+        }
         if (full) {
           rawProfile.fullName = full;
         }

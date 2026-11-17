@@ -229,6 +229,12 @@ const mergeTwoOrders = (orderA, orderB) => {
 
 const ensureOrdersHaveTokens = (ordersList) => {
   if (!Array.isArray(ordersList)) return [];
+  let cachedClients = [];
+  try {
+    const raw = localStorage.getItem('autoflow_clients');
+    if (raw) cachedClients = JSON.parse(raw);
+  } catch {}
+
   const normalized = ordersList
     .filter(o => o && o?.client?.dniNif !== '48392019Z')
     .map(o => {
@@ -254,6 +260,27 @@ const ensureOrdersHaveTokens = (ordersList) => {
         (o.client?.dniNif === '77326719G' || /manuelgonzalezperez/i.test(o.client?.email || '') || o.client?.phone === '+34693483441')
       ) {
         fixedClientName = 'Manuel Gonzalez Perez';
+      }
+      if (
+        (fixedClientName === 'Maria' || fixedClientName === 'Nuevo Cliente' || fixedClientName === 'Cliente') &&
+        (o.client?.dniNif === '77889966L' || /mariafernandez/i.test(o.client?.email || '') || o.client?.phone === '+34678546333' || o.vehicle?.licensePlate === '8769JKP')
+      ) {
+        fixedClientName = 'Maria Fernandez Dominguez';
+      }
+
+      // Si el nombre sigue siendo 'Cliente' o vacío, buscar en la lista de clientes registrados
+      if (!fixedClientName || fixedClientName === 'Cliente' || fixedClientName === 'Nuevo Cliente') {
+        const oDni = (o.client?.dniNif || '').trim().toUpperCase();
+        const oPhone = (o.client?.phone || '').replace(/\s+/g, '');
+        const oPlate = (o.vehicle?.licensePlate || '').trim().toUpperCase();
+        const found = cachedClients.find(c =>
+          (oDni && c.dniNif && c.dniNif.toUpperCase() === oDni) ||
+          (oPhone && c.phone && c.phone.replace(/\s+/g, '') === oPhone) ||
+          (oPlate && Array.isArray(c.vehicles) && c.vehicles.some(v => v.licensePlate?.toUpperCase() === oPlate))
+        );
+        if (found && found.fullName && found.fullName !== 'Cliente' && found.fullName !== 'Nuevo Cliente') {
+          fixedClientName = found.fullName;
+        }
       }
 
       return {
@@ -335,6 +362,12 @@ const migrateClientsList = (clientsList) => {
         (c.dniNif === '77326719G' || /manuelgonzalezperez/i.test(c.email || '') || c.phone === '+34693483441')
       ) {
         fixedName = 'Manuel Gonzalez Perez';
+      }
+      if (
+        (fixedName === 'Maria' || fixedName === 'Nuevo Cliente' || fixedName === 'Cliente') &&
+        (c.dniNif === '77889966L' || /mariafernandez/i.test(c.email || '') || c.phone === '+34678546333')
+      ) {
+        fixedName = 'Maria Fernandez Dominguez';
       }
       if (fixedAddress && /[0-9]{4}[A-Z]{3}/i.test(fixedAddress)) {
         fixedAddress = fixedAddress.split(/\s+(?:Audi|Seat|BMW|Mercedes|Renault|Volkswagen|Peugeot|Ford|Toyota|[0-9]{4}[A-Z]{3})/i)[0].trim();
