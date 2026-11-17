@@ -15,12 +15,26 @@ export default function KanbanBoard() {
     downloadOrderPdf,
     openWhatsAppChat,
     sendWhatsAppChatMessage,
-    deleteOrder
+    deleteOrder,
+    updateOrderDetails
   } = useWorkshop();
 
   // Modals Local States
   const [selectedOrder, setSelectedOrder] = useState(null);
-  const [modalType, setModalType] = useState(null); // 'diagnosis' | 'mechanics' | 'view-diagnosis' | 'view-wa-sent'
+  const [modalType, setModalType] = useState(null); // 'diagnosis' | 'mechanics' | 'view-diagnosis' | 'view-wa-sent' | 'edit-order'
+  
+  // Edit Card Form Local States
+  const [editForm, setEditForm] = useState({
+    fullName: '',
+    dniNif: '',
+    phone: '',
+    email: '',
+    brand: '',
+    model: '',
+    licensePlate: '',
+    mileage: '',
+    problemDescription: ''
+  });
   
   // Diagnosis Form Local States
   const [diagnosisText, setDiagnosisText] = useState('');
@@ -114,6 +128,46 @@ export default function KanbanBoard() {
     setModalType('view-diagnosis');
   };
 
+  const openEditModal = (order) => {
+    setSelectedOrder(order);
+    setEditForm({
+      fullName: order.client?.fullName || '',
+      dniNif: order.client?.dniNif || '',
+      phone: order.client?.phone || '',
+      email: order.client?.email || '',
+      brand: order.vehicle?.brand || '',
+      model: order.vehicle?.model || '',
+      licensePlate: order.vehicle?.licensePlate || '',
+      mileage: order.vehicle?.mileage !== undefined && order.vehicle?.mileage !== null ? order.vehicle.mileage : '',
+      problemDescription: order.problemDescription || ''
+    });
+    setModalType('edit-order');
+  };
+
+  const handleSaveEditOrder = (e) => {
+    e.preventDefault();
+    if (!selectedOrder) return;
+
+    updateOrderDetails(selectedOrder.id, {
+      client: {
+        fullName: editForm.fullName.trim(),
+        dniNif: editForm.dniNif.trim(),
+        phone: editForm.phone.trim(),
+        email: editForm.email.trim()
+      },
+      vehicle: {
+        brand: editForm.brand.trim(),
+        model: editForm.model.trim(),
+        licensePlate: editForm.licensePlate.toUpperCase().trim(),
+        mileage: editForm.mileage !== '' ? Number(editForm.mileage) : 0
+      },
+      problemDescription: editForm.problemDescription.trim()
+    });
+
+    setModalType(null);
+    setSelectedOrder(null);
+  };
+
   // Enviar WhatsApp con enlace único real al Portal de Aprobación y abrir el Chat de WhatsApp
   const sendWhatsAppBudget = async (order) => {
     const portalUrl = getPortalUrl(order);
@@ -191,6 +245,26 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                     <div className="card-client-name">{order.client.fullName}</div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => openEditModal(order)}
+                      title="Editar datos de la tarjeta"
+                      style={{
+                        background: 'rgba(0, 242, 254, 0.12)',
+                        color: '#00f2fe',
+                        border: '1px solid rgba(0, 242, 254, 0.35)',
+                        borderRadius: '6px',
+                        padding: '0.22rem 0.45rem',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                      </svg>
+                    </button>
                     <button
                       type="button"
                       onClick={() => openWhatsAppChat(order.id)}
@@ -298,23 +372,45 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                     <div className="card-vehicle-title">{order.vehicle.brand} {order.vehicle.model}</div>
                     <div className="card-client-name">{order.client.fullName}</div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => openWhatsAppChat(order.id)}
-                    title="Abrir chat de WhatsApp de esta orden"
-                    style={{
-                      background: 'rgba(37, 211, 102, 0.14)',
-                      color: '#25D366',
-                      border: '1px solid rgba(37, 211, 102, 0.35)',
-                      borderRadius: '6px',
-                      padding: '0.2rem 0.45rem',
-                      fontSize: '0.72rem',
-                      fontWeight: 700,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    💬
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => openEditModal(order)}
+                      title="Editar datos de la tarjeta"
+                      style={{
+                        background: 'rgba(0, 242, 254, 0.12)',
+                        color: '#00f2fe',
+                        border: '1px solid rgba(0, 242, 254, 0.35)',
+                        borderRadius: '6px',
+                        padding: '0.22rem 0.45rem',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openWhatsAppChat(order.id)}
+                      title="Abrir chat de WhatsApp de esta orden"
+                      style={{
+                        background: 'rgba(37, 211, 102, 0.14)',
+                        color: '#25D366',
+                        border: '1px solid rgba(37, 211, 102, 0.35)',
+                        borderRadius: '6px',
+                        padding: '0.2rem 0.45rem',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      💬
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="card-details">
@@ -393,23 +489,45 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                     <div className="card-vehicle-title">{order.vehicle.brand} {order.vehicle.model}</div>
                     <div className="card-client-name">{order.client.fullName}</div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => openWhatsAppChat(order.id)}
-                    title="Abrir chat de WhatsApp de esta orden"
-                    style={{
-                      background: 'rgba(37, 211, 102, 0.14)',
-                      color: '#25D366',
-                      border: '1px solid rgba(37, 211, 102, 0.35)',
-                      borderRadius: '6px',
-                      padding: '0.2rem 0.45rem',
-                      fontSize: '0.72rem',
-                      fontWeight: 700,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    💬
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => openEditModal(order)}
+                      title="Editar datos de la tarjeta"
+                      style={{
+                        background: 'rgba(0, 242, 254, 0.12)',
+                        color: '#00f2fe',
+                        border: '1px solid rgba(0, 242, 254, 0.35)',
+                        borderRadius: '6px',
+                        padding: '0.22rem 0.45rem',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openWhatsAppChat(order.id)}
+                      title="Abrir chat de WhatsApp de esta orden"
+                      style={{
+                        background: 'rgba(37, 211, 102, 0.14)',
+                        color: '#25D366',
+                        border: '1px solid rgba(37, 211, 102, 0.35)',
+                        borderRadius: '6px',
+                        padding: '0.2rem 0.45rem',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      💬
+                    </button>
+                  </div>
                 </div>
 
                 <div className="card-details">
@@ -471,23 +589,45 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                     <div className="card-vehicle-title">{order.vehicle.brand} {order.vehicle.model}</div>
                     <div className="card-client-name">{order.client.fullName}</div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => openWhatsAppChat(order.id)}
-                    title="Abrir chat de WhatsApp de esta orden"
-                    style={{
-                      background: 'rgba(37, 211, 102, 0.14)',
-                      color: '#25D366',
-                      border: '1px solid rgba(37, 211, 102, 0.35)',
-                      borderRadius: '6px',
-                      padding: '0.2rem 0.45rem',
-                      fontSize: '0.72rem',
-                      fontWeight: 700,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    💬
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => openEditModal(order)}
+                      title="Editar datos de la tarjeta"
+                      style={{
+                        background: 'rgba(0, 242, 254, 0.12)',
+                        color: '#00f2fe',
+                        border: '1px solid rgba(0, 242, 254, 0.35)',
+                        borderRadius: '6px',
+                        padding: '0.22rem 0.45rem',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openWhatsAppChat(order.id)}
+                      title="Abrir chat de WhatsApp de esta orden"
+                      style={{
+                        background: 'rgba(37, 211, 102, 0.14)',
+                        color: '#25D366',
+                        border: '1px solid rgba(37, 211, 102, 0.35)',
+                        borderRadius: '6px',
+                        padding: '0.2rem 0.45rem',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      💬
+                    </button>
+                  </div>
                 </div>
 
                 <div className="card-details">
@@ -554,23 +694,45 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
                     <div className="card-vehicle-title">{order.vehicle.brand} {order.vehicle.model}</div>
                     <div className="card-client-name">{order.client.fullName}</div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => openWhatsAppChat(order.id)}
-                    title="Abrir chat de WhatsApp de esta orden"
-                    style={{
-                      background: 'rgba(37, 211, 102, 0.14)',
-                      color: '#25D366',
-                      border: '1px solid rgba(37, 211, 102, 0.35)',
-                      borderRadius: '6px',
-                      padding: '0.2rem 0.45rem',
-                      fontSize: '0.72rem',
-                      fontWeight: 700,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    💬
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => openEditModal(order)}
+                      title="Editar datos de la tarjeta"
+                      style={{
+                        background: 'rgba(0, 242, 254, 0.12)',
+                        color: '#00f2fe',
+                        border: '1px solid rgba(0, 242, 254, 0.35)',
+                        borderRadius: '6px',
+                        padding: '0.22rem 0.45rem',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openWhatsAppChat(order.id)}
+                      title="Abrir chat de WhatsApp de esta orden"
+                      style={{
+                        background: 'rgba(37, 211, 102, 0.14)',
+                        color: '#25D366',
+                        border: '1px solid rgba(37, 211, 102, 0.35)',
+                        borderRadius: '6px',
+                        padding: '0.2rem 0.45rem',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      💬
+                    </button>
+                  </div>
                 </div>
 
                 <div className="card-details">
@@ -776,6 +938,158 @@ Puedes pasar cuando te venga bien durante nuestro horario (Lunes a Viernes de 08
               </button>
             )}
           </div>
+        </div>
+      )}
+
+      {modalType === 'edit-order' && selectedOrder && (
+        <div className="overlay">
+          <form className="glass-panel modal-content" onSubmit={handleSaveEditOrder} style={{ maxWidth: '560px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <button type="button" className="modal-close" onClick={() => setModalType(null)}>×</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.4rem' }}>
+              <span style={{
+                background: 'rgba(0, 242, 254, 0.15)',
+                color: '#00f2fe',
+                borderRadius: '8px',
+                padding: '0.4rem 0.5rem',
+                display: 'inline-flex',
+                alignItems: 'center'
+              }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                </svg>
+              </span>
+              <div>
+                <h3 className="modal-title" style={{ margin: 0 }}>Editar Tarjeta de Taller</h3>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  Orden <strong style={{ color: 'var(--color-primary)' }}>{selectedOrder.id}</strong> — Corrige cliente, vehículo o avería
+                </div>
+              </div>
+            </div>
+
+            {/* SECCIÓN CLIENTE */}
+            <div style={{
+              background: 'rgba(255, 255, 255, 0.03)',
+              border: '1px solid var(--border-glass)',
+              borderRadius: '8px',
+              padding: '0.85rem',
+              marginTop: '0.75rem'
+            }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#00f2fe', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.6rem' }}>
+                👤 Datos del Cliente
+              </div>
+              <div className="form-group" style={{ marginBottom: '0.6rem' }}>
+                <label style={{ fontSize: '0.78rem' }}>Nombre Completo</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  required
+                  placeholder="Ej: María Fernández Domínguez"
+                  value={editForm.fullName}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, fullName: e.target.value }))}
+                />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.6rem' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label style={{ fontSize: '0.78rem' }}>DNI / NIF</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Ej: 77889966L"
+                    value={editForm.dniNif}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, dniNif: e.target.value.toUpperCase() }))}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label style={{ fontSize: '0.78rem' }}>Teléfono (WhatsApp)</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Ej: +34 620 922 500"
+                    value={editForm.phone}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, phone: e.target.value }))}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* SECCIÓN VEHÍCULO */}
+            <div style={{
+              background: 'rgba(255, 255, 255, 0.03)',
+              border: '1px solid var(--border-glass)',
+              borderRadius: '8px',
+              padding: '0.85rem',
+              marginTop: '0.75rem'
+            }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#4facfe', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.6rem' }}>
+                🚗 Datos del Vehículo
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.6rem', marginBottom: '0.6rem' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label style={{ fontSize: '0.78rem' }}>Marca</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Ej: Ford"
+                    value={editForm.brand}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, brand: e.target.value }))}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label style={{ fontSize: '0.78rem' }}>Modelo</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Ej: Focus"
+                    value={editForm.model}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, model: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.6rem' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label style={{ fontSize: '0.78rem' }}>Matrícula</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Ej: 8769JKP"
+                    value={editForm.licensePlate}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, licensePlate: e.target.value.toUpperCase() }))}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label style={{ fontSize: '0.78rem' }}>Kilómetros</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    placeholder="Ej: 145000"
+                    value={editForm.mileage}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, mileage: e.target.value }))}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* SECCIÓN AVERÍA */}
+            <div className="form-group" style={{ marginTop: '0.75rem', marginBottom: '1rem' }}>
+              <label style={{ fontSize: '0.78rem' }}>Motivo de la Visita / Avería Reportada</label>
+              <textarea
+                className="form-control"
+                rows="3"
+                value={editForm.problemDescription}
+                onChange={(e) => setEditForm(prev => ({ ...prev, problemDescription: e.target.value }))}
+                placeholder="Descripción del problema o motivo de entrada..."
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.5rem' }}>
+              <button type="button" className="btn btn-secondary" onClick={() => setModalType(null)}>
+                Cancelar
+              </button>
+              <button type="submit" className="btn">
+                Guardar Cambios
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

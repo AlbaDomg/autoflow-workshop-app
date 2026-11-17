@@ -2738,6 +2738,105 @@ REGLA CRÍTICA UNIVERSAL DE CITAS Y GOOGLE CALENDAR (LUNES A VIERNES DE 08:00 A 
     addToast('🧹 Historial de coches entregados vaciado', 'info');
   };
 
+  // Modificar/editar datos de una orden (cliente, vehículo, avería) desde la tarjeta
+  const updateOrderDetails = (orderId, updatedData) => {
+    if (!orderId || !updatedData) return;
+
+    const nowTs = Date.now();
+    ordersMutationSeqRef.current += 1;
+    skipNextOrdersPushRef.current = false;
+
+    let targetOrder = null;
+
+    setOrders(prev => prev.map(order => {
+      if (order.id !== orderId) return order;
+
+      const updatedClient = {
+        ...order.client,
+        ...(updatedData.client || {})
+      };
+
+      const updatedVehicle = {
+        ...order.vehicle,
+        ...(updatedData.vehicle || {})
+      };
+
+      const updated = {
+        ...order,
+        client: updatedClient,
+        vehicle: updatedVehicle,
+        problemDescription: updatedData.problemDescription !== undefined ? updatedData.problemDescription : order.problemDescription,
+        clientAnomaliesReport: updatedData.clientAnomaliesReport !== undefined ? updatedData.clientAnomaliesReport : order.clientAnomaliesReport,
+        updatedAt: nowTs
+      };
+
+      targetOrder = updated;
+      return updated;
+    }));
+
+    // Sincronizar también con la base de datos de clientes si se cambiaron datos del cliente o vehículo
+    if (updatedData.client || updatedData.vehicle) {
+      clientsMutationSeqRef.current += 1;
+      skipNextClientsPushRef.current = false;
+
+      setClients(prev => {
+        const clientDni = (updatedData.client?.dniNif || targetOrder?.client?.dniNif || '').trim().toLowerCase();
+        const clientPhone = (updatedData.client?.phone || targetOrder?.client?.phone || '').trim().replace(/\s+/g, '');
+        const clientName = (updatedData.client?.fullName ? updatedData.client.fullName.trim() : targetOrder?.client?.fullName) || 'Cliente';
+
+        // Buscar coincidencia por DNI primero (si no es N/A), luego por teléfono
+        const existingIdx = prev.findIndex(c => {
+          if (clientDni && clientDni !== 'n/a' && c.dniNif && c.dniNif.toLowerCase() === clientDni) return true;
+          if (clientPhone && c.phone && c.phone.replace(/\s+/g, '') === clientPhone) return true;
+          return false;
+        });
+
+        const vehData = {
+          brand: updatedData.vehicle?.brand || targetOrder?.vehicle?.brand || '',
+          model: updatedData.vehicle?.model || targetOrder?.vehicle?.model || '',
+          licensePlate: (updatedData.vehicle?.licensePlate || targetOrder?.vehicle?.licensePlate || '').toUpperCase().trim(),
+          mileage: updatedData.vehicle?.mileage !== undefined ? updatedData.vehicle.mileage : (targetOrder?.vehicle?.mileage || 0),
+          vin: updatedData.vehicle?.vin || targetOrder?.vehicle?.vin || ''
+        };
+
+        if (existingIdx !== -1) {
+          return prev.map((c, i) => {
+            if (i !== existingIdx) return c;
+            const existingVehicles = c.vehicles || [];
+            const vehIdx = existingVehicles.findIndex(v => v.licensePlate?.toUpperCase().trim() === vehData.licensePlate);
+            let newVehicles = [...existingVehicles];
+            if (vehIdx !== -1) {
+              newVehicles[vehIdx] = { ...newVehicles[vehIdx], ...vehData };
+            } else if (vehData.licensePlate) {
+              newVehicles.push(vehData);
+            }
+            return {
+              ...c,
+              fullName: clientName,
+              ...(updatedData.client?.dniNif ? { dniNif: updatedData.client.dniNif.trim() } : {}),
+              ...(updatedData.client?.phone ? { phone: updatedData.client.phone.trim() } : {}),
+              ...(updatedData.client?.email ? { email: updatedData.client.email.trim() } : {}),
+              vehicles: newVehicles
+            };
+          });
+        } else if (clientName && clientName !== 'Cliente') {
+          const newClient = {
+            id: `CLI-${Date.now().toString().slice(-4)}`,
+            fullName: clientName,
+            dniNif: updatedData.client?.dniNif || targetOrder?.client?.dniNif || 'N/A',
+            phone: updatedData.client?.phone || targetOrder?.client?.phone || '',
+            email: updatedData.client?.email || targetOrder?.client?.email || '',
+            vehicles: vehData.licensePlate ? [vehData] : []
+          };
+          return [...prev, newClient];
+        }
+        return prev;
+      });
+    }
+
+    addToast(`✏️ Tarjeta ${orderId} actualizada`, 'success');
+  };
+
   // Eliminar una orden individual por ID de forma permanente
   const deleteOrder = (orderId) => {
     if (!orderId) return;
@@ -2762,6 +2861,8 @@ REGLA CRÍTICA UNIVERSAL DE CITAS Y GOOGLE CALENDAR (LUNES A VIERNES DE 08:00 A 
       activeTab,
       setActiveTab,
       addOrder,
+      updateOrderDetails,
+      updateOrder: updateOrderDetails,
       deleteOrder,
       clearDeliveredOrders,
       saveDiagnosis,
