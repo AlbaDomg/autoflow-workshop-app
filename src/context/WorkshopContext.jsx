@@ -603,39 +603,31 @@ export const WorkshopProvider = ({ children }) => {
                   }))
               );
               setClients(prev => {
-                if (!clientsInitialSeedDoneRef.current) {
-                  clientsInitialSeedDoneRef.current = true;
-                  const merged = [...cleanedCloud];
-                  let localHasNew = false;
-                  prev.forEach(lc => {
-                    if (lc && lc.dniNif && !deletedDnis.has(lc.dniNif.toUpperCase())) {
-                      const idx = merged.findIndex(mc => mc.dniNif?.toLowerCase() === lc.dniNif.toLowerCase());
-                      if (idx === -1) {
-                        merged.push(lc);
-                        localHasNew = true;
-                      } else {
-                        const mVehs = [...(merged[idx].vehicles || [])];
-                        (lc.vehicles || []).forEach(lv => {
-                          if (lv && lv.licensePlate && !deletedPlates.has(lv.licensePlate.toUpperCase()) &&
-                              !mVehs.some(v => v.licensePlate?.toLowerCase() === lv.licensePlate.toLowerCase())) {
-                            mVehs.push(lv);
-                            localHasNew = true;
-                          }
-                        });
-                        merged[idx] = { ...merged[idx], ...lc, vehicles: mVehs };
-                      }
+                const merged = [...cleanedCloud];
+                let localHasUnpushed = false;
+                prev.forEach(lc => {
+                  if (lc && lc.dniNif && !deletedDnis.has(lc.dniNif.toUpperCase())) {
+                    const idx = merged.findIndex(mc => mc.dniNif?.toLowerCase() === lc.dniNif.toLowerCase());
+                    if (idx === -1) {
+                      merged.push(lc);
+                      localHasUnpushed = true;
+                    } else {
+                      const mVehs = [...(merged[idx].vehicles || [])];
+                      (lc.vehicles || []).forEach(lv => {
+                        if (lv && lv.licensePlate && !deletedPlates.has(lv.licensePlate.toUpperCase()) &&
+                            !mVehs.some(v => v.licensePlate?.toLowerCase() === lv.licensePlate.toLowerCase())) {
+                          mVehs.push(lv);
+                          localHasUnpushed = true;
+                        }
+                      });
+                      merged[idx] = { ...merged[idx], ...lc, vehicles: mVehs };
                     }
-                  });
-                  const finalSeed = migrateClientsList(merged);
-                  if (JSON.stringify(prev) === JSON.stringify(finalSeed)) return prev;
-                  if (!localHasNew) skipNextClientsPushRef.current = true;
-                  return finalSeed;
-                }
-
-                // En lecturas sucesivas, Neon manda al 100% (altas, ediciones y borrados sincronizados entre PC y Móvil)
-                if (JSON.stringify(prev) === JSON.stringify(cleanedCloud)) return prev;
-                skipNextClientsPushRef.current = true;
-                return cleanedCloud;
+                  }
+                });
+                const finalClients = migrateClientsList(merged);
+                if (JSON.stringify(prev) === JSON.stringify(finalClients)) return prev;
+                if (!localHasUnpushed) skipNextClientsPushRef.current = true;
+                return finalClients;
               });
               return;
             }
@@ -1126,11 +1118,23 @@ export const WorkshopProvider = ({ children }) => {
     if (dniMatch) {
       activeDni = dniMatch[1].toUpperCase();
       setSessionPendingDni(activeDni);
+      // Si el usuario escribe un DNI para registrarse o identificarse, desbloquearlo de la lista de exclusión
+      try {
+        const saved = JSON.parse(localStorage.getItem('autoflow_deleted_client_dnis') || '[]');
+        if (saved.includes(activeDni)) {
+          const filtered = saved.filter(d => d !== activeDni);
+          localStorage.setItem('autoflow_deleted_client_dnis', JSON.stringify(filtered));
+        }
+      } catch {}
     }
 
     // Reconocimiento automático de cliente existente en la base de datos de Fichas Clientes
     const foundClient = findExistingClientProfile(targetOrder, text);
-    const matchedClient = foundClient || rememberedClient || null;
+    let validRememberedClient = rememberedClient;
+    if (rememberedClient && activeDni && rememberedClient.dniNif && rememberedClient.dniNif.toUpperCase() !== activeDni.toUpperCase()) {
+      validRememberedClient = null;
+    }
+    const matchedClient = foundClient || validRememberedClient || null;
     if (matchedClient?.dniNif) {
       activeDni = matchedClient.dniNif;
     }
@@ -1506,25 +1510,23 @@ REGLA CRÍTICA UNIVERSAL DE CITAS Y GOOGLE CALENDAR (LUNES A VIERNES DE 08:00 A 
                 entryDate: baseVeh.entryDate || new Date().toISOString().split('T')[0]
               };
 
-              // Si es un cliente nuevo o tenía nombre provisional ("Nuevo Cliente"), guardarlo/actualizarlo en Fichas Clientes
-              if (!matchedClient || !matchedClient.dniNif || !matchedHasRealName) {
-                if (activeCli.fullName && (activeCli.dniNif || activeCli.phone)) {
-                  addClient(activeCli, activeVeh);
-                  setChatSessionClients(prev => ({
+              // Si tenemos datos suficientes del cliente para registrar su ficha, guardarlo/actualizarlo siempre en Fichas Clientes
+              if (activeCli.fullName && (activeCli.dniNif || activeCli.phone)) {
+                addClient(activeCli, activeVeh);
+                setChatSessionClients(prev => ({
+                  ...prev,
+                  [sessionKey]: { ...activeCli, vehicles: activeVeh.licensePlate ? [activeVeh] : [] },
+                  'ORD-NUEVA-RECEPCION': { ...activeCli, vehicles: activeVeh.licensePlate ? [activeVeh] : [] }
+                }));
+                if (activeVeh.licensePlate) {
+                  setChatSessionVehicles(prev => ({
                     ...prev,
-                    [sessionKey]: { ...activeCli, vehicles: activeVeh.licensePlate ? [activeVeh] : [] },
-                    'ORD-NUEVA-RECEPCION': { ...activeCli, vehicles: activeVeh.licensePlate ? [activeVeh] : [] }
+                    [sessionKey]: activeVeh,
+                    'ORD-NUEVA-RECEPCION': activeVeh
                   }));
-                  if (activeVeh.licensePlate) {
-                    setChatSessionVehicles(prev => ({
-                      ...prev,
-                      [sessionKey]: activeVeh,
-                      'ORD-NUEVA-RECEPCION': activeVeh
-                    }));
-                  }
-                  if (!matchedClient) {
-                    addToast(`👤 Ficha creada: ${activeCli.fullName} (${activeVeh.brand} ${activeVeh.model})`, 'success');
-                  }
+                }
+                if (!matchedClient || !matchedHasRealName) {
+                  addToast(`👤 Ficha creada: ${activeCli.fullName} (${activeVeh.brand} ${activeVeh.model})`, 'success');
                 }
               }
 
@@ -1807,6 +1809,20 @@ REGLA CRÍTICA UNIVERSAL DE CITAS Y GOOGLE CALENDAR (LUNES A VIERNES DE 08:00 A 
       }
       return [newOrder, ...prev];
     });
+
+    // Desbloquear de la lista de exclusión si este cliente se está registrando o creando
+    if (clientData.dniNif) {
+      try {
+        const saved = JSON.parse(localStorage.getItem('autoflow_deleted_client_dnis') || '[]');
+        const cleanDni = clientData.dniNif.trim().toUpperCase();
+        if (saved.includes(cleanDni)) {
+          const filtered = saved.filter(d => d !== cleanDni);
+          localStorage.setItem('autoflow_deleted_client_dnis', JSON.stringify(filtered));
+        }
+      } catch {}
+    }
+    clientsMutationSeqRef.current += 1;
+    skipNextClientsPushRef.current = false;
 
     // Guardar / actualizar en el directorio de clientes de forma segura
     setClients(prev => {
